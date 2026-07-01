@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
-  ArrowDown,
   ArrowLeftRight,
   BadgeCheck,
   BadgeDollarSign,
@@ -33,7 +32,7 @@ import {
   LockKeyhole,
   MapPinned,
   Moon,
-  PiggyBank,
+  Coins,
   PencilLine,
   Plus,
   Power,
@@ -334,7 +333,7 @@ const serviceTiles = [
   { title: "الحسابات", icon: UserRound },
   { title: "البطاقات", icon: CreditCard },
   { title: "التمويل", icon: CircleDollarSign },
-  { title: "الإدخار", icon: PiggyBank },
+  { title: "الإدخار", icon: Coins },
   { title: "الاستثمار", icon: WalletCards },
   { title: "العائلة", icon: UsersRound },
   { title: "أكثر", icon: Sparkles, accent: true },
@@ -435,9 +434,8 @@ function AutoFlowScreen({ announce, openDraft, automations, toggleAutomation }) 
         </div>
         <div className="flow-overview__stats">
           <div><strong>{automations.filter((item) => item.active).length}</strong><span>مفعّلة</span></div>
-          <div><strong>6</strong><span>تنفيذات</span></div>
+          <div><strong>{automations.reduce((sum, item) => sum + (item.runs || 0), 0)}</strong><span>تنفيذات</span></div>
         </div>
-        <div className="flow-orbit" aria-hidden="true"><i /><i /><i /></div>
       </section>
 
       <section className="my-flows">
@@ -450,7 +448,7 @@ function AutoFlowScreen({ announce, openDraft, automations, toggleAutomation }) 
             <article className={`automation-card ${flow.active ? "is-active" : ""}`} key={flow.id}>
               <div className="automation-card__top">
                 <div className="automation-card__icon"><flow.icon /></div>
-                <div className="automation-card__title"><strong>{flow.title}</strong><span>{flow.caption}</span></div>
+                <div className="automation-card__title"><strong>{flow.title}</strong><span>{triggerCaptions[flow.config.trigger]}</span></div>
                 <button
                   className={`flow-switch ${flow.active ? "is-on" : ""}`}
                   onClick={() => toggleAutomation(flow.id)}
@@ -458,18 +456,11 @@ function AutoFlowScreen({ announce, openDraft, automations, toggleAutomation }) 
                   aria-pressed={flow.active}
                 ><i /></button>
               </div>
-              <div className="mini-flow">
-                {flow.steps.map((step, index) => (
-                  <React.Fragment key={step}>
-                    <span>{step}</span>
-                    {index < flow.steps.length - 1 && <ArrowDown />}
-                  </React.Fragment>
-                ))}
-              </div>
+              <p className="automation-card__summary">{buildAutomationSummary(flow.config)}</p>
               <div className="automation-card__meta">
                 <span>{flow.active ? <><i /> مفعّلة</> : <><Power /> متوقفة</>}</span>
                 <small>{flow.runs ? `نُفذت ${flow.runs} مرات هذا الشهر` : "لم تُنفذ بعد"}</small>
-                <button onClick={() => announce(`إعدادات ${flow.title}`)} aria-label={`إعدادات ${flow.title}`}><Settings2 /></button>
+                <button onClick={() => openDraft(null, flow.config, flow.id)} aria-label={`تعديل ${flow.title}`}><Settings2 /></button>
               </div>
             </article>
           ))}
@@ -494,12 +485,6 @@ function AutoFlowScreen({ announce, openDraft, automations, toggleAutomation }) 
             );
           })}
         </div>
-      </section>
-
-      <section className="last-run-card">
-        <div className="last-run-card__icon"><CheckCircle2 /></div>
-        <div><span>آخر تنفيذ</span><strong>تم تحويل 2,000 ر.س إلى الادخار</strong><small>راتبي الذكي • اليوم، 8:31 ص</small></div>
-        <ChevronLeft />
       </section>
     </div>
   );
@@ -656,13 +641,6 @@ function buildAutomationSummary(form) {
   return `${triggerCaptions[form.trigger]}، ${actionText}${safetyText}، ${approvalText}`;
 }
 
-function buildAutomationMiniSteps(form) {
-  const triggerLabel = { salary: "الراتب", incoming: "الحوالة", scheduled: "الموعد", bill: "الفاتورة" }[form.trigger];
-  const actionLabel = { save: `ادخار ${formatWizardAmount(form)}`, bill: "سداد فاتورة", transfer: "تحويل داخلي", notify: "إشعار" }[form.action];
-  const approvalLabel = { auto: "تلقائي", approval: "موافقة", conditional: "موافقة مشروطة" }[form.approval];
-  return [triggerLabel, actionLabel, approvalLabel];
-}
-
 function SettingsChoice({ label, value, options, onChange, columns = 3 }) {
   return (
     <div className="settings-choice">
@@ -693,7 +671,7 @@ const wizardStepTitles = {
   review: "المراجعة والحفظ",
 };
 
-function AutomationWizard({ initialIdea, initialPreset, close, announce, onSave }) {
+function AutomationWizard({ initialIdea, initialPreset, editingId, close, announce, onSave }) {
   const [stepIndex, setStepIndex] = useState(0);
   const [form, setForm] = useState(() => ({ ...defaultWizardState, ...initialPreset }));
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
@@ -703,7 +681,7 @@ function AutomationWizard({ initialIdea, initialPreset, close, announce, onSave 
   const goBack = () => setStepIndex((index) => Math.max(index - 1, 0));
 
   const handleSave = () => {
-    onSave(form);
+    onSave(form, editingId);
     announce(`تم حفظ ${form.name} بنجاح`);
     close();
   };
@@ -713,7 +691,7 @@ function AutomationWizard({ initialIdea, initialPreset, close, announce, onSave 
       <section className="draft-sheet wizard-sheet" role="dialog" aria-modal="true" aria-label="إنشاء أتمتة">
         <div className="draft-sheet__handle" />
         <header className="wizard-header">
-          <div><span>إنشاء أتمتة جديدة</span><h2>{wizardStepTitles[currentStep]}</h2></div>
+          <div><span>{editingId ? "تعديل الأتمتة" : "إنشاء أتمتة جديدة"}</span><h2>{wizardStepTitles[currentStep]}</h2></div>
           <button onClick={close} aria-label="إغلاق"><X /></button>
         </header>
 
@@ -864,26 +842,25 @@ function App() {
   const [toast, setToast] = useState("");
   const [draftIdea, setDraftIdea] = useState("");
   const [draftPreset, setDraftPreset] = useState(null);
+  const [draftEditingId, setDraftEditingId] = useState(null);
   const [draftOpen, setDraftOpen] = useState(false);
   const [showAutoFlowHint, setShowAutoFlowHint] = useState(true);
   const [automations, setAutomations] = useState([
     {
       id: "salary-flow",
       title: "راتبي الذكي",
-      caption: "عند نزول الراتب",
       active: true,
       runs: 3,
       icon: BanknoteArrowDown,
-      steps: ["راتب", "ادخار 20%", "موافقة"],
+      config: { ...defaultWizardState, trigger: "salary", action: "save", value: "20", unit: "percent", safetyOn: false, approval: "approval", name: "راتبي الذكي" },
     },
     {
       id: "bills-flow",
       title: "فواتيري في موعدها",
-      caption: "قبل الاستحقاق بيومين",
       active: false,
       runs: 0,
       icon: ReceiptText,
-      steps: ["تذكير", "فحص الرصيد", "سداد"],
+      config: { ...defaultWizardState, trigger: "bill", action: "bill", value: "150", unit: "fixed", safetyOn: true, minimumBalance: "3000", approval: "approval", name: "فواتيري في موعدها" },
     },
   ]);
 
@@ -913,23 +890,29 @@ function App() {
   const time = useMemo(() => new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(new Date()), []);
 
   const announce = (message) => setToast(message);
-  const openDraft = (idea, preset) => {
+  const openDraft = (idea, preset, editingId) => {
     setDraftIdea(idea);
     setDraftPreset(preset || null);
+    setDraftEditingId(editingId || null);
     setDraftOpen(true);
   };
   const toggleAutomation = (id) => {
     setAutomations((items) => items.map((item) => item.id === id ? { ...item, active: !item.active } : item));
   };
-  const addAutomation = (form) => {
+  const saveAutomation = (form, editingId) => {
+    if (editingId) {
+      setAutomations((items) => items.map((item) => item.id === editingId
+        ? { ...item, title: form.name, active: form.activeAfterSave, icon: triggerIcons[form.trigger], config: form }
+        : item));
+      return;
+    }
     setAutomations((items) => [{
       id: `flow-${Date.now()}`,
       title: form.name,
-      caption: triggerCaptions[form.trigger],
       active: form.activeAfterSave,
       runs: 0,
       icon: triggerIcons[form.trigger],
-      steps: buildAutomationMiniSteps(form),
+      config: form,
     }, ...items]);
   };
 
@@ -1032,9 +1015,10 @@ function App() {
           <AutomationWizard
             initialIdea={draftIdea}
             initialPreset={draftPreset}
+            editingId={draftEditingId}
             close={() => setDraftOpen(false)}
             announce={announce}
-            onSave={addAutomation}
+            onSave={saveAutomation}
           />
         )}
 
