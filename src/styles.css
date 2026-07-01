@@ -330,6 +330,9 @@ button { font: inherit; }
 .wizard-progress { margin: 14px 0; display: grid; grid-auto-flow: column; gap: 6px; }
 .wizard-progress i { height: 4px; border-radius: 99px; background: var(--line); }
 .wizard-progress i.is-done { background: var(--coral); }
+.wizard-demo-note { margin: 0 0 14px; padding: 10px; display: grid; grid-template-columns: 17px 1fr; gap: 7px; align-items: center; border-radius: 12px; color: #8a5f25; background: rgba(243,173,70,.14); }
+.wizard-demo-note svg { width: 15px; }
+.wizard-demo-note span { font-size: 8px; line-height: 1.6; font-weight: 700; }
 .wizard-idea-note { margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--line); border-right: 3px solid #7058df; border-radius: 12px; color: var(--muted); background: var(--card); font-size: 9px; line-height: 1.55; }
 .wizard-body { display: block; }
 .wizard-summary { margin: 0 0 16px; padding: 14px; border-radius: 16px; color: var(--ink); background: var(--surface-soft); font-size: 12px; font-weight: 700; line-height: 1.9; }

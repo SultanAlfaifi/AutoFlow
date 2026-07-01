@@ -721,6 +721,8 @@ function AutomationWizard({ initialIdea, initialPreset, close, announce, onSave 
           {wizardSteps.map((step, index) => <i key={step} className={index <= stepIndex ? "is-done" : ""} />)}
         </div>
 
+        <div className="wizard-demo-note"><Info /><span>هذه نسخة تجريبية (Demo) — الخيارات المعروضة هنا لغرض التجربة فقط، وسيتم إطلاق خيارات أتمتة متقدمة أوسع في النسخة النهائية.</span></div>
+
         {initialIdea && stepIndex === 0 && <blockquote className="wizard-idea-note">{initialIdea}</blockquote>}
 
         <div className="wizard-body">
