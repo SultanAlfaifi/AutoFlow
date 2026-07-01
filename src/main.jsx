@@ -35,7 +35,6 @@ import {
   Moon,
   PiggyBank,
   PencilLine,
-  Play,
   Plus,
   Power,
   ReceiptText,
@@ -402,42 +401,15 @@ const flowTemplates = [
   },
 ];
 
-function AutoFlowScreen({ announce, openDraft }) {
-  const [idea, setIdea] = useState("");
-  const [automations, setAutomations] = useState([
-    {
-      id: "salary-flow",
-      title: "راتبي الذكي",
-      caption: "عند نزول الراتب",
-      active: true,
-      runs: 3,
-      steps: ["راتب", "ادخار 20%", "موافقة"],
-    },
-    {
-      id: "bills-flow",
-      title: "فواتيري في موعدها",
-      caption: "قبل الاستحقاق بيومين",
-      active: false,
-      runs: 0,
-      steps: ["تذكير", "فحص الرصيد", "سداد"],
-    },
-  ]);
+const templatePresets = {
+  salary: { trigger: "salary", action: "save", value: "20", unit: "percent", safetyOn: true, minimumBalance: "3000", approval: "approval" },
+  bills: { trigger: "bill", action: "bill", value: "150", unit: "fixed", safetyOn: false, minimumBalance: "3000", approval: "approval" },
+  "safe-balance": { trigger: "scheduled", action: "notify", message: "الرصيد اقترب من الحد الآمن", safetyOn: true, minimumBalance: "3000", approval: "auto" },
+  monthly: { trigger: "scheduled", action: "save", value: "500", unit: "fixed", safetyOn: true, minimumBalance: "3000", approval: "approval" },
+};
 
-  const toggleAutomation = (id) => {
-    setAutomations((items) => items.map((item) => item.id === id ? { ...item, active: !item.active } : item));
-  };
-
-  const generateDraft = () => {
-    const fallbackIdea = "عند نزول الراتب ادخر 20% ثم سدد الفواتير بعد موافقتي";
-    const value = idea.trim() || fallbackIdea;
-    setIdea(value);
-    openDraft(value);
-  };
-
-  const useTemplate = (template) => {
-    setIdea(template.idea);
-    openDraft(template.idea);
-  };
+function AutoFlowScreen({ announce, openDraft, automations, toggleAutomation }) {
+  const useTemplate = (template) => openDraft(template.idea, templatePresets[template.id]);
 
   return (
     <div className="autoflow-screen">
@@ -468,31 +440,6 @@ function AutoFlowScreen({ announce, openDraft }) {
         <div className="flow-orbit" aria-hidden="true"><i /><i /><i /></div>
       </section>
 
-      <section className="ai-composer" hidden>
-        <div className="ai-composer__heading">
-          <div className="ai-composer__icon"><Bot /></div>
-          <div>
-            <span>مساعد AutoFlow</span>
-            <strong>صف الأتمتة التي في بالك</strong>
-          </div>
-          <span className="privacy-chip"><LockKeyhole /> بدون بياناتك</span>
-        </div>
-        <div className="idea-input-wrap">
-          <textarea
-            value={idea}
-            onChange={(event) => setIdea(event.target.value)}
-            placeholder="مثال: إذا نزل الراتب، ادخر 20% وسدد الفواتير…"
-            aria-label="وصف فكرة الأتمتة"
-          />
-          <button onClick={generateDraft} aria-label="حوّل الفكرة إلى بلوكات"><WandSparkles /> حوّلها إلى بلوكات</button>
-        </div>
-        <div className="idea-suggestions">
-          <span>جرّب:</span>
-          <button onClick={() => setIdea("رتب لي روتين الراتب مع موافقتي")}>روتين الراتب</button>
-          <button onClick={() => setIdea("ذكرني قبل الفواتير ثم انتظر موافقتي")}>الفواتير</button>
-        </div>
-      </section>
-
       <section className="my-flows">
         <div className="content-heading">
           <div><span>أتمتاتي</span><small>{automations.length} أتمتة</small></div>
@@ -502,7 +449,7 @@ function AutoFlowScreen({ announce, openDraft }) {
           {automations.map((flow) => (
             <article className={`automation-card ${flow.active ? "is-active" : ""}`} key={flow.id}>
               <div className="automation-card__top">
-                <div className="automation-card__icon">{flow.id === "salary-flow" ? <BanknoteArrowDown /> : <ReceiptText />}</div>
+                <div className="automation-card__icon"><flow.icon /></div>
                 <div className="automation-card__title"><strong>{flow.title}</strong><span>{flow.caption}</span></div>
                 <button
                   className={`flow-switch ${flow.active ? "is-on" : ""}`}
@@ -635,21 +582,86 @@ function AutoFlowAssistant({ openDraft }) {
   );
 }
 
-const blockNames = {
-  trigger: "المشغّل",
-  condition: "شرط الأمان",
-  action: "الإجراء",
-  approval: "صلاحية التنفيذ",
+const triggerOptions = [
+  { value: "salary", label: "نزول الراتب", icon: BanknoteArrowDown },
+  { value: "incoming", label: "وصول حوالة", icon: WalletCards },
+  { value: "scheduled", label: "موعد مجدول", icon: CalendarClock },
+  { value: "bill", label: "استحقاق فاتورة", icon: ReceiptText },
+];
+
+const actionOptions = [
+  { value: "save", label: "تحويل للادخار", icon: CircleDollarSign },
+  { value: "bill", label: "سداد فاتورة", icon: ReceiptText },
+  { value: "transfer", label: "تحويل داخلي", icon: ArrowLeftRight },
+  { value: "notify", label: "إرسال إشعار", icon: Bell },
+];
+
+const approvalOptions = [
+  { value: "auto", title: "تنفيذ تلقائي", caption: "دون طلب موافقة كل مرة" },
+  { value: "approval", title: "انتظار موافقتي", caption: "لن يُنفذ شيء قبل قبولي" },
+  { value: "conditional", title: "موافقة مشروطة", caption: "عند تجاوز المبلغ حدًا معينًا" },
+];
+
+const defaultWizardState = {
+  trigger: "salary",
+  action: "save",
+  value: "20",
+  unit: "percent",
+  safetyOn: false,
+  minimumBalance: "3000",
+  approval: "approval",
+  approvalLimit: "500",
+  message: "تم تنفيذ الأتمتة بنجاح",
+  name: "أتمتتي الجديدة",
+  color: "coral",
+  activeAfterSave: true,
 };
 
-const financialActionLibrary = [
-  { id: "pay-bill", category: "payments", title: "سداد فاتورة", description: "سداد فاتورة تختارها يدويًا", icon: ReceiptText, tone: "action", variable: "اختر الفاتورة" },
-  { id: "internal-transfer", category: "transfers", title: "تحويل داخلي", description: "حوّل مبلغًا بين حساباتك", icon: ArrowLeftRight, tone: "trigger", variable: "اختر المبلغ" },
-  { id: "notification", category: "notifications", title: "إرسال إشعار", description: "أرسل ملخصًا بنتيجة التنفيذ", icon: Bell, tone: "condition", variable: "نص الإشعار" },
-  { id: "monthly-report", category: "insights", title: "إنشاء تقرير", description: "لخّص تنفيذات الأتمتة ونتائجها", icon: FileText, tone: "approval", variable: "تقرير شهري" },
-  { id: "wait", category: "control", title: "انتظار", description: "انتظر مدة قبل الخطوة التالية", icon: Clock3, tone: "condition", variable: "30 دقيقة" },
-  { id: "ask", category: "control", title: "طلب قرار", description: "أوقف المسار حتى يختار العميل", icon: LockKeyhole, tone: "approval", variable: "اسأل عند التشغيل" },
-];
+const triggerCaptions = {
+  salary: "عند نزول الراتب",
+  incoming: "عند وصول حوالة",
+  scheduled: "في كل موعد مجدول",
+  bill: "قبل استحقاق الفاتورة",
+};
+
+const triggerIcons = {
+  salary: BanknoteArrowDown,
+  incoming: WalletCards,
+  scheduled: CalendarClock,
+  bill: ReceiptText,
+};
+
+function formatWizardAmount(form) {
+  return form.unit === "percent" ? `${form.value || 0}%` : `${Number(form.value || 0).toLocaleString("en")} ر.س`;
+}
+
+function buildAutomationSummary(form) {
+  const actionText = {
+    save: `حوّل ${formatWizardAmount(form)} إلى حساب الادخار`,
+    bill: `سدّد الفاتورة (${formatWizardAmount(form)})`,
+    transfer: `حوّل ${formatWizardAmount(form)} بين حساباتك`,
+    notify: `أرسل لك إشعارًا بنص: "${form.message}"`,
+  }[form.action];
+
+  const safetyText = form.safetyOn
+    ? `، بشرط ألا ينزل رصيدك عن ${Number(form.minimumBalance || 0).toLocaleString("en")} ر.س`
+    : "";
+
+  const approvalText = {
+    auto: "وتُنفَّذ تلقائيًا دون انتظار.",
+    approval: "وتنتظر موافقتك في كل مرة قبل التنفيذ.",
+    conditional: `وتنتظر موافقتك فقط إذا تجاوز المبلغ ${Number(form.approvalLimit || 0).toLocaleString("en")} ر.س.`,
+  }[form.approval];
+
+  return `${triggerCaptions[form.trigger]}، ${actionText}${safetyText}، ${approvalText}`;
+}
+
+function buildAutomationMiniSteps(form) {
+  const triggerLabel = { salary: "الراتب", incoming: "الحوالة", scheduled: "الموعد", bill: "الفاتورة" }[form.trigger];
+  const actionLabel = { save: `ادخار ${formatWizardAmount(form)}`, bill: "سداد فاتورة", transfer: "تحويل داخلي", notify: "إشعار" }[form.action];
+  const approvalLabel = { auto: "تلقائي", approval: "موافقة", conditional: "موافقة مشروطة" }[form.approval];
+  return [triggerLabel, actionLabel, approvalLabel];
+}
 
 function SettingsChoice({ label, value, options, onChange, columns = 3 }) {
   return (
@@ -672,387 +684,171 @@ function SettingsChoice({ label, value, options, onChange, columns = 3 }) {
   );
 }
 
-function ActionLibrarySheet({ close, addAction }) {
-  const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("suggested");
-  const categories = [
-    { id: "suggested", label: "مقترحة" },
-    { id: "payments", label: "سداد" },
-    { id: "transfers", label: "تحويل" },
-    { id: "notifications", label: "إشعارات" },
-    { id: "control", label: "تحكم" },
-  ];
-  const normalizedQuery = query.trim().toLowerCase();
-  const actions = financialActionLibrary.filter((action) => {
-    const matchesCategory = category === "suggested" ? ["pay-bill", "notification", "wait"].includes(action.id) : action.category === category;
-    const matchesQuery = !normalizedQuery || `${action.title} ${action.description}`.toLowerCase().includes(normalizedQuery);
-    return matchesCategory && matchesQuery;
-  });
+const wizardSteps = ["trigger", "action", "safety", "approval", "review"];
+const wizardStepTitles = {
+  trigger: "متى تبدأ؟",
+  action: "وش يصير؟",
+  safety: "شرط أمان",
+  approval: "مين يوافق؟",
+  review: "المراجعة والحفظ",
+};
+
+function AutomationWizard({ initialIdea, initialPreset, close, announce, onSave }) {
+  const [stepIndex, setStepIndex] = useState(0);
+  const [form, setForm] = useState(() => ({ ...defaultWizardState, ...initialPreset }));
+  const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+  const currentStep = wizardSteps[stepIndex];
+
+  const goNext = () => setStepIndex((index) => Math.min(index + 1, wizardSteps.length - 1));
+  const goBack = () => setStepIndex((index) => Math.max(index - 1, 0));
+
+  const handleSave = () => {
+    onSave(form);
+    announce(`تم حفظ ${form.name} بنجاح`);
+    close();
+  };
 
   return (
-    <div className="action-library-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
-      <section className="action-library-sheet" role="dialog" aria-modal="true" aria-label="مكتبة إجراءات AutoFlow">
+    <div className="draft-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
+      <section className="draft-sheet wizard-sheet" role="dialog" aria-modal="true" aria-label="إنشاء أتمتة">
         <div className="draft-sheet__handle" />
-        <header className="action-library-header">
-          <div><span>مكتبة الإجراءات</span><h3>ماذا يحدث بعد ذلك؟</h3></div>
-          <button onClick={close} aria-label="إغلاق مكتبة الإجراءات"><X /></button>
-        </header>
-        <label className="action-search"><Search /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحث عن سداد، تحويل، إشعار…" aria-label="البحث في الإجراءات" /></label>
-        <div className="action-categories">
-          {categories.map((item) => <button key={item.id} className={category === item.id ? "is-selected" : ""} onClick={() => setCategory(item.id)} aria-pressed={category === item.id}>{item.label}</button>)}
-        </div>
-        <div className="suggestion-reason"><Sparkles /><span>مقترحة بناءً على الخطوة السابقة</span></div>
-        <div className="action-library-list">
-          {actions.map((action) => {
-            const Icon = action.icon;
-            return (
-              <button key={action.id} onClick={() => addAction(action)}>
-                <span className={`action-library-list__icon action-library-list__icon--${action.tone}`}><Icon /></span>
-                <span><strong>{action.title}</strong><small>{action.description}</small></span>
-                <Plus />
-              </button>
-            );
-          })}
-          {!actions.length && <div className="no-actions"><Search /><span>لم نجد إجراءًا مطابقًا</span></div>}
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function BlockSettingsSheet({ type, settings, close, save }) {
-  const [draft, setDraft] = useState(settings);
-  const update = (key, value) => setDraft((current) => ({ ...current, [key]: value }));
-
-  return (
-    <div className="block-settings-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
-      <section className="block-settings-sheet" role="dialog" aria-modal="true" aria-label={`إعدادات ${blockNames[type]}`}>
-        <div className="draft-sheet__handle" />
-        <header className="block-settings-header">
-          <div className={`block-settings-header__icon block-settings-header__icon--${type}`}><Settings2 /></div>
-          <div><span>إعدادات البلوك</span><h3>{blockNames[type]}</h3></div>
-          <button onClick={close} aria-label="إغلاق الإعدادات"><X /></button>
+        <header className="wizard-header">
+          <div><span>إنشاء أتمتة جديدة</span><h2>{wizardStepTitles[currentStep]}</h2></div>
+          <button onClick={close} aria-label="إغلاق"><X /></button>
         </header>
 
-        <div className="block-settings-body">
-          {type === "trigger" && (
+        <div className="wizard-progress" aria-label={`الخطوة ${stepIndex + 1} من ${wizardSteps.length}`}>
+          {wizardSteps.map((step, index) => <i key={step} className={index <= stepIndex ? "is-done" : ""} />)}
+        </div>
+
+        {initialIdea && stepIndex === 0 && <blockquote className="wizard-idea-note">{initialIdea}</blockquote>}
+
+        <div className="wizard-body">
+          {currentStep === "trigger" && (
+            <fieldset className="settings-group">
+              <legend>اختر متى تبدأ الأتمتة</legend>
+              <div className="option-grid option-grid--two">
+                {triggerOptions.map(({ value, label, icon: Icon }) => (
+                  <label key={value} className="option-card">
+                    <input type="radio" name="wizard-trigger" checked={form.trigger === value} onChange={() => update("trigger", value)} />
+                    <span><Icon /><b>{label}</b><i /></span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
+
+          {currentStep === "action" && (
             <>
               <fieldset className="settings-group">
-                <legend>متى تبدأ الأتمتة؟</legend>
+                <legend>اختر ماذا يحدث</legend>
                 <div className="option-grid option-grid--two">
-                  {[
-                    ["salary", "نزول الراتب", BanknoteArrowDown],
-                    ["incoming", "وصول حوالة", WalletCards],
-                    ["scheduled", "موعد مجدول", CalendarClock],
-                    ["bill", "استحقاق فاتورة", ReceiptText],
-                  ].map(([value, label, Icon]) => (
+                  {actionOptions.map(({ value, label, icon: Icon }) => (
                     <label key={value} className="option-card">
-                      <input type="radio" name="trigger-kind" value={value} checked={draft.kind === value} onChange={() => update("kind", value)} />
+                      <input type="radio" name="wizard-action" checked={form.action === value} onChange={() => update("action", value)} />
                       <span><Icon /><b>{label}</b><i /></span>
                     </label>
                   ))}
                 </div>
               </fieldset>
-              <SettingsChoice
-                label="نطاق التكرار"
-                value={draft.frequency}
-                onChange={(value) => update("frequency", value)}
-                options={[
-                  { value: "each", label: "كل حدث" },
-                  { value: "once-month", label: "مرة شهريًا" },
-                  { value: "once-day", label: "مرة يوميًا" },
-                ]}
-              />
-              <div className="settings-note"><Info /><span>يتحقق النظام من نوع العملية، لكنك ستختار الحساب يدويًا لاحقًا.</span></div>
-            </>
-          )}
 
-          {type === "condition" && (
-            <>
-              <label className="settings-field">
-                <span>الحد الأدنى للرصيد بعد التنفيذ</span>
-                <div className="amount-field"><input type="number" min="0" step="100" value={draft.minimumBalance} onChange={(event) => update("minimumBalance", event.target.value)} aria-label="الحد الأدنى للرصيد" /><b>ر.س</b></div>
-              </label>
-              <fieldset className="settings-group">
-                <legend>إذا لم يتحقق الشرط</legend>
-                <div className="stacked-options">
-                  {[
-                    ["stop", "إيقاف الأتمتة", "لا يُنفذ أي إجراء لاحق"],
-                    ["skip", "تخطي الإجراء", "ينتقل إلى الخطوة التالية"],
-                    ["ask", "طلب قراري", "يرسل إشعارًا قبل المتابعة"],
-                  ].map(([value, title, caption]) => (
-                    <label key={value} className="stacked-option">
-                      <input type="radio" name="failure-policy" checked={draft.onFailure === value} onChange={() => update("onFailure", value)} />
-                      <span><span className="stacked-option__copy"><b>{title}</b><small>{caption}</small></span><i /></span>
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-            </>
-          )}
-
-          {type === "action" && (
-            <>
-              <fieldset className="settings-group">
-                <legend>نوع الإجراء</legend>
-                <div className="option-grid option-grid--two">
-                  {[
-                    ["save", "تحويل للادخار", CircleDollarSign],
-                    ["bill", "سداد فاتورة", ReceiptText],
-                    ["transfer", "تحويل داخلي", ArrowLeftRight],
-                    ["notify", "إرسال إشعار", Bell],
-                  ].map(([value, label, Icon]) => (
-                    <label key={value} className="option-card">
-                      <input type="radio" name="action-kind" value={value} checked={draft.kind === value} onChange={() => update("kind", value)} />
-                      <span><Icon /><b>{label}</b><i /></span>
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-              {draft.kind !== "notify" && (
+              {form.action === "notify" ? (
+                <label className="text-field">
+                  <span>نص الإشعار</span>
+                  <input value={form.message} onChange={(event) => update("message", event.target.value)} />
+                </label>
+              ) : form.action === "bill" ? (
+                <label className="settings-field">
+                  <span>مبلغ الفاتورة التقريبي</span>
+                  <div className="amount-field"><input type="number" min="0" value={form.value} onChange={(event) => update("value", event.target.value)} /><b>ر.س</b></div>
+                </label>
+              ) : (
                 <div className="split-fields">
                   <label className="settings-field">
                     <span>القيمة</span>
-                    <div className="amount-field"><input type="number" min="0" value={draft.value} onChange={(event) => update("value", event.target.value)} aria-label="قيمة الإجراء" /><b>{draft.unit === "percent" ? "%" : "ر.س"}</b></div>
+                    <div className="amount-field"><input type="number" min="0" value={form.value} onChange={(event) => update("value", event.target.value)} /><b>{form.unit === "percent" ? "%" : "ر.س"}</b></div>
                   </label>
                   <SettingsChoice
                     label="نوع القيمة"
-                    value={draft.unit}
+                    value={form.unit}
                     columns={2}
                     onChange={(value) => update("unit", value)}
-                    options={[
-                      { value: "percent", label: "نسبة %" },
-                      { value: "fixed", label: "مبلغ ثابت" },
-                    ]}
+                    options={[{ value: "percent", label: "نسبة %" }, { value: "fixed", label: "مبلغ ثابت" }]}
                   />
                 </div>
               )}
-              <SettingsChoice
-                label="موقع الإجراء في المسار"
-                value={draft.order}
-                onChange={(value) => update("order", value)}
-                options={[
-                  { value: "first", label: "أولًا" },
-                  { value: "after-bills", label: "بعد الفواتير" },
-                  { value: "last", label: "أخيرًا" },
-                ]}
-              />
             </>
           )}
 
-          {type === "approval" && (
+          {currentStep === "safety" && (
+            <>
+              <div className="settings-toggle-row">
+                <div><ShieldCheck /><span><strong>وقف الأتمتة إذا الرصيد قليل</strong><small>حماية بسيطة قبل أي تنفيذ</small></span></div>
+                <button className={`flow-switch ${form.safetyOn ? "is-on" : ""}`} onClick={() => update("safetyOn", !form.safetyOn)} aria-label="تفعيل شرط الأمان" aria-pressed={form.safetyOn}><i /></button>
+              </div>
+              {form.safetyOn && (
+                <label className="settings-field">
+                  <span>لا تنفّذ إذا سينزل الرصيد عن</span>
+                  <div className="amount-field"><input type="number" min="0" step="100" value={form.minimumBalance} onChange={(event) => update("minimumBalance", event.target.value)} /><b>ر.س</b></div>
+                </label>
+              )}
+              <div className="settings-note"><Info /><span>إذا ما تحقق الشرط، تُلغى العملية تلقائيًا وتوصلك رسالة.</span></div>
+            </>
+          )}
+
+          {currentStep === "approval" && (
             <>
               <fieldset className="settings-group">
                 <legend>صلاحية التنفيذ</legend>
                 <div className="stacked-options">
-                  {[
-                    ["auto", "تنفيذ تلقائي", "دون طلب موافقة كل مرة"],
-                    ["approval", "انتظار موافقتي", "لن يُنفذ شيء قبل قبولي"],
-                    ["conditional", "موافقة مشروطة", "عند تجاوز المبلغ حدًا معينًا"],
-                  ].map(([value, title, caption]) => (
+                  {approvalOptions.map(({ value, title, caption }) => (
                     <label key={value} className="stacked-option">
-                      <input type="radio" name="approval-mode" checked={draft.mode === value} onChange={() => update("mode", value)} />
+                      <input type="radio" name="wizard-approval" checked={form.approval === value} onChange={() => update("approval", value)} />
                       <span><span className="stacked-option__copy"><b>{title}</b><small>{caption}</small></span><i /></span>
                     </label>
                   ))}
                 </div>
               </fieldset>
-              <div className="settings-toggle-row">
-                <div><Bell /><span><strong>إرسال تذكير قبل التنفيذ</strong><small>يمكنك إلغاء المسار من الإشعار</small></span></div>
-                <button className={`flow-switch ${draft.reminder ? "is-on" : ""}`} onClick={() => update("reminder", !draft.reminder)} aria-label="تفعيل تذكير قبل التنفيذ" aria-pressed={draft.reminder}><i /></button>
-              </div>
-              {draft.reminder && (
-                <>
-                  <div className="split-fields">
-                    <label className="settings-field">
-                      <span>التذكير قبل</span>
-                      <div className="amount-field"><input type="number" min="1" value={draft.reminderMinutes} onChange={(event) => update("reminderMinutes", event.target.value)} aria-label="مدة التذكير بالدقائق" /><b>دقيقة</b></div>
-                    </label>
-                  </div>
-                  <SettingsChoice
-                    label="انتهاء مهلة الموافقة"
-                    value={draft.expiry}
-                    onChange={(value) => update("expiry", value)}
-                    options={[
-                      { value: "30", label: "30 دقيقة" },
-                      { value: "120", label: "ساعتان" },
-                      { value: "day", label: "نهاية اليوم" },
-                    ]}
-                  />
-                </>
+              {form.approval === "conditional" && (
+                <label className="settings-field">
+                  <span>اسألني فقط إذا تجاوز المبلغ</span>
+                  <div className="amount-field"><input type="number" min="0" value={form.approvalLimit} onChange={(event) => update("approvalLimit", event.target.value)} /><b>ر.س</b></div>
+                </label>
               )}
-              <div className="settings-note settings-note--warning"><ShieldCheck /><span>إذا لم تصل موافقتك ضمن المهلة، يُلغى التنفيذ تلقائيًا.</span></div>
+            </>
+          )}
+
+          {currentStep === "review" && (
+            <>
+              <p className="wizard-summary">{buildAutomationSummary(form)}</p>
+              <label className="text-field">
+                <span>اسم الأتمتة</span>
+                <input value={form.name} onChange={(event) => update("name", event.target.value)} />
+              </label>
+              <div className="color-picker">
+                <span>اللون</span>
+                <div>
+                  {["coral", "purple", "blue", "green"].map((color) => (
+                    <button key={color} type="button" className={`color-dot color-dot--${color} ${form.color === color ? "is-selected" : ""}`} onClick={() => update("color", color)} aria-label={`لون ${color}`} aria-pressed={form.color === color}><i /></button>
+                  ))}
+                </div>
+              </div>
+              <div className="settings-toggle-row">
+                <div><Power /><span><strong>تشغيل الأتمتة بعد الحفظ</strong><small>يمكنك إيقافها لاحقًا من مركز AutoFlow</small></span></div>
+                <button className={`flow-switch ${form.activeAfterSave ? "is-on" : ""}`} onClick={() => update("activeAfterSave", !form.activeAfterSave)} aria-label="تشغيل الأتمتة بعد الحفظ" aria-pressed={form.activeAfterSave}><i /></button>
+              </div>
             </>
           )}
         </div>
 
-        <footer className="block-settings-footer">
-          <button className="secondary" onClick={close}>إلغاء</button>
-          <button className="primary" onClick={() => save(draft)}><CheckCircle2 /> حفظ الإعدادات</button>
-        </footer>
-      </section>
-    </div>
-  );
-}
-
-function FlowDraftSheet({ idea, close, announce }) {
-  const [editingBlock, setEditingBlock] = useState(null);
-  const [actionLibraryOpen, setActionLibraryOpen] = useState(false);
-  const [extraActions, setExtraActions] = useState([]);
-  const openActionLibrary = (event) => {
-    event?.preventDefault();
-    event?.stopPropagation();
-    setActionLibraryOpen(true);
-  };
-  const [bindings, setBindings] = useState({ source: "", savings: "" });
-  const [customization, setCustomization] = useState({
-    name: "راتبي الذكي",
-    color: "coral",
-    icon: "workflow",
-    activeAfterSave: true,
-  });
-  const [blockSettings, setBlockSettings] = useState({
-    trigger: { kind: "salary", frequency: "each" },
-    condition: { minimumBalance: "3000", onFailure: "stop" },
-    action: { kind: "save", value: "20", unit: "percent", order: "first" },
-    approval: { mode: "approval", reminder: true, reminderMinutes: "30", expiry: "30" },
-  });
-
-  const triggerTitles = {
-    salary: "عند نزول الراتب",
-    incoming: "عند وصول حوالة",
-    scheduled: "في الموعد المجدول",
-    bill: "قبل استحقاق الفاتورة",
-  };
-  const actionTitles = {
-    save: `تحويل ${blockSettings.action.value}${blockSettings.action.unit === "percent" ? "%" : " ر.س"} إلى الادخار`,
-    bill: `سداد فاتورة بقيمة ${blockSettings.action.value} ${blockSettings.action.unit === "percent" ? "%" : "ر.س"}`,
-    transfer: `تحويل ${blockSettings.action.value}${blockSettings.action.unit === "percent" ? "%" : " ر.س"} بين الحسابات`,
-    notify: "إرسال إشعار مخصص",
-  };
-  const approvalTitles = {
-    auto: "التنفيذ التلقائي ضمن الحدود",
-    approval: "انتظار موافقتي قبل التنفيذ",
-    conditional: "طلب موافقة عند تجاوز الحد",
-  };
-  const personalizationIcons = [
-    { id: "workflow", icon: Workflow, label: "مسار" },
-    { id: "saving", icon: CircleDollarSign, label: "ادخار" },
-    { id: "safe", icon: ShieldCheck, label: "أمان" },
-    { id: "schedule", icon: CalendarClock, label: "موعد" },
-  ];
-  const blocks = [
-    { id: "trigger", type: "البداية", title: triggerTitles[blockSettings.trigger.kind], icon: Play, tone: "trigger", output: "مبلغ الراتب" },
-    { id: "condition", type: "إذا", title: `الرصيد بعد التنفيذ ≥ ${Number(blockSettings.condition.minimumBalance || 0).toLocaleString("en")} ر.س`, icon: ShieldCheck, tone: "condition", output: "نتيجة الشرط" },
-    { id: "action", type: "إجراء", title: actionTitles[blockSettings.action.kind], icon: CircleDollarSign, tone: "action", output: "نتيجة التحويل" },
-    ...extraActions,
-    { id: "approval", type: "التنفيذ", title: approvalTitles[blockSettings.approval.mode], icon: LockKeyhole, tone: "approval", output: "حالة التنفيذ" },
-  ];
-
-  return (
-    <div className="draft-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
-      <section className="draft-sheet" role="dialog" aria-modal="true" aria-label="تخصيص أتمتة AutoFlow">
-        <div className="draft-sheet__handle" />
-        <header className="draft-sheet__header">
-          <div className="draft-sheet__badge"><WandSparkles /></div>
-          <div><span>إنشاء بمساعدة AutoFlow</span><h2>خصص أتمتتك قبل الحفظ</h2></div>
-          <button onClick={close} aria-label="إغلاق تخصيص الأتمتة"><X /></button>
-        </header>
-        <div className="draft-privacy"><LockKeyhole /> <span><strong>لم نطلع على أي بيانات بنكية.</strong> المساعد صمم الهيكل فقط.</span></div>
-        <blockquote>{idea}</blockquote>
-        <div className="shortcut-editor-label"><span>الإجراءات</span><small>تنفذ من الأعلى إلى الأسفل</small></div>
-        <div className="draft-blocks">
-          {blocks.map(({ id, type, title, icon: Icon, tone, output, variable }, index) => (
-            <React.Fragment key={id}>
-              <article className={`draft-block shortcut-action draft-block--${tone} ${editingBlock === id ? "is-configuring" : ""}`}>
-                <div className="shortcut-action__header">
-                  <span className="draft-block__icon"><Icon /></span>
-                  <div><small>{type}</small><strong>{id.startsWith("extra-") ? title : id === "trigger" ? "مشغّل الأتمتة" : id === "condition" ? "شرط الأمان" : id === "approval" ? "طريقة التنفيذ" : "تحويل للادخار"}</strong></div>
-                  {id.startsWith("extra-") ? (
-                    <button onClick={() => setExtraActions((items) => items.filter((item) => item.id !== id))} aria-label={`حذف ${title}`}><X /></button>
-                  ) : (
-                    <button onClick={() => setEditingBlock(id)} aria-label={`تعديل ${id === "trigger" ? "المشغّل" : id === "condition" ? "شرط الأمان" : id === "action" ? "إجراء" : "صلاحية"}`}><Settings2 /></button>
-                  )}
-                </div>
-                <div className="shortcut-sentence">
-                  {id === "trigger" && <>عند <button className="parameter-pill parameter-pill--event" onClick={() => setEditingBlock("trigger")}>{title.replace("عند ", "")}</button> في <button className={`parameter-pill ${bindings.source ? "is-bound" : "is-empty"}`} onClick={() => setBindings((current) => ({ ...current, source: current.source ? "" : "جاري •••• 1000" }))}>{bindings.source || "اختر الحساب"}</button></>}
-                  {id === "condition" && <>إذا كان <span className="parameter-pill parameter-pill--variable">الرصيد المتوقع</span> <span className="parameter-pill parameter-pill--operator">≥</span> <button className="parameter-pill parameter-pill--value" onClick={() => setEditingBlock("condition")}>{Number(blockSettings.condition.minimumBalance || 0).toLocaleString("en")} ر.س</button></>}
-                  {id === "action" && <>حوّل <button className="parameter-pill parameter-pill--value" onClick={() => setEditingBlock("action")}>{blockSettings.action.value}{blockSettings.action.unit === "percent" ? "%" : " ر.س"}</button> من <span className="parameter-pill parameter-pill--variable">مبلغ الراتب</span> إلى <button className={`parameter-pill ${bindings.savings ? "is-bound" : "is-empty"}`} onClick={() => setBindings((current) => ({ ...current, savings: current.savings ? "" : "الادخار •••• 2030" }))}>{bindings.savings || "اختر الحساب"}</button></>}
-                  {id === "approval" && <><button className="parameter-pill parameter-pill--approval" onClick={() => setEditingBlock("approval")}>{title}</button>{blockSettings.approval.reminder && <> مع تذكير قبل <button className="parameter-pill parameter-pill--value" onClick={() => setEditingBlock("approval")}>{blockSettings.approval.reminderMinutes} دقيقة</button></>}</>}
-                  {id.startsWith("extra-") && <>{title} باستخدام <button className="parameter-pill parameter-pill--variable" onClick={() => announce(`تخصيص ${title}`)}>{variable}</button></>}
-                </div>
-                <div className="shortcut-output"><span>المخرج</span><b>{output}</b></div>
-              </article>
-              {index < blocks.length - 1 && <div className="block-connector"><i />{(id === "action" || id.startsWith("extra-")) && <button type="button" onMouseDown={openActionLibrary} onClick={openActionLibrary} aria-label={`إضافة إجراء بعد ${title}`}><Plus /></button>}<ChevronDown /></div>}
-            </React.Fragment>
-          ))}
-        </div>
-        <button type="button" className="add-action-button" onMouseDown={openActionLibrary} onClick={openActionLibrary}><Plus /> إضافة إجراء</button>
-        <div className="variable-legend"><span className="parameter-pill parameter-pill--variable">قيمة ديناميكية</span><small>القيم الزرقاء تُملأ من الخطوة السابقة أو تختارها أنت.</small></div>
-
-        <section className="automation-personalization">
-          <div className="automation-personalization__heading"><Sparkles /><div><strong>تخصيص الأتمتة</strong><small>اجعلها واضحة وسهلة التمييز</small></div></div>
-          <label className="personalization-name">
-            <span>اسم الأتمتة</span>
-            <input value={customization.name} onChange={(event) => setCustomization((current) => ({ ...current, name: event.target.value }))} aria-label="اسم الأتمتة" />
-          </label>
-          <div className="personalization-row">
-            <div className="color-picker">
-              <span>اللون</span>
-              <div>
-                {["coral", "purple", "blue", "green"].map((color) => <button key={color} className={`color-dot color-dot--${color} ${customization.color === color ? "is-selected" : ""}`} onClick={() => setCustomization((current) => ({ ...current, color }))} aria-label={`لون ${color}`} aria-pressed={customization.color === color}><i /></button>)}
-              </div>
-            </div>
-            <div className="icon-picker">
-              <span>الرمز</span>
-              <div>
-                {personalizationIcons.map(({ id, icon: Icon, label }) => <button key={id} className={customization.icon === id ? "is-selected" : ""} onClick={() => setCustomization((current) => ({ ...current, icon: id }))} aria-label={`رمز ${label}`} aria-pressed={customization.icon === id}><Icon /></button>)}
-              </div>
-            </div>
-          </div>
-          <div className="settings-toggle-row personalization-toggle">
-            <div><Power /><span><strong>تشغيل الأتمتة بعد الحفظ</strong><small>يمكنك إيقافها لاحقًا من مركز AutoFlow</small></span></div>
-            <button className={`flow-switch ${customization.activeAfterSave ? "is-on" : ""}`} onClick={() => setCustomization((current) => ({ ...current, activeAfterSave: !current.activeAfterSave }))} aria-label="تشغيل الأتمة بعد الحفظ" aria-pressed={customization.activeAfterSave}><i /></button>
-          </div>
-        </section>
         <footer className="draft-sheet__footer">
-          <button className="secondary" onClick={close}>إلغاء</button>
-          <button className="primary" onClick={() => {
-            if (!bindings.source || !bindings.savings) {
-              announce("اختر الحساب المصدر وحساب الادخار أولًا");
-              return;
-            }
-            announce(`تم حفظ ${customization.name} بنجاح`);
-            close();
-          }}><CheckCircle2 /> حفظ الأتمتة</button>
+          <button className="secondary" onClick={stepIndex === 0 ? close : goBack}>{stepIndex === 0 ? "إلغاء" : "رجوع"}</button>
+          {currentStep === "review" ? (
+            <button className="primary" onClick={handleSave}><CheckCircle2 /> حفظ الأتمتة</button>
+          ) : (
+            <button className="primary" onClick={goNext}>التالي <ChevronLeft /></button>
+          )}
         </footer>
-        {editingBlock && (
-          <BlockSettingsSheet
-            type={editingBlock}
-            settings={blockSettings[editingBlock]}
-            close={() => setEditingBlock(null)}
-            save={(value) => {
-              setBlockSettings((current) => ({ ...current, [editingBlock]: value }));
-              announce(`تم حفظ إعدادات ${blockNames[editingBlock]}`);
-              setEditingBlock(null);
-            }}
-          />
-        )}
-        {actionLibraryOpen && (
-          <ActionLibrarySheet
-            close={() => setActionLibraryOpen(false)}
-            addAction={(action) => {
-              setExtraActions((items) => [...items, {
-                ...action,
-                id: `extra-${action.id}-${Date.now()}`,
-                type: "إجراء",
-                output: "نتيجة الإجراء",
-              }]);
-              announce(`تمت إضافة ${action.title}`);
-              setActionLibraryOpen(false);
-            }}
-          />
-        )}
       </section>
     </div>
   );
@@ -1065,8 +861,29 @@ function App() {
   const [activeNav, setActiveNav] = useState("home");
   const [toast, setToast] = useState("");
   const [draftIdea, setDraftIdea] = useState("");
+  const [draftPreset, setDraftPreset] = useState(null);
   const [draftOpen, setDraftOpen] = useState(false);
   const [showAutoFlowHint, setShowAutoFlowHint] = useState(true);
+  const [automations, setAutomations] = useState([
+    {
+      id: "salary-flow",
+      title: "راتبي الذكي",
+      caption: "عند نزول الراتب",
+      active: true,
+      runs: 3,
+      icon: BanknoteArrowDown,
+      steps: ["راتب", "ادخار 20%", "موافقة"],
+    },
+    {
+      id: "bills-flow",
+      title: "فواتيري في موعدها",
+      caption: "قبل الاستحقاق بيومين",
+      active: false,
+      runs: 0,
+      icon: ReceiptText,
+      steps: ["تذكير", "فحص الرصيد", "سداد"],
+    },
+  ]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -1094,9 +911,24 @@ function App() {
   const time = useMemo(() => new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(new Date()), []);
 
   const announce = (message) => setToast(message);
-  const openDraft = (idea) => {
+  const openDraft = (idea, preset) => {
     setDraftIdea(idea);
+    setDraftPreset(preset || null);
     setDraftOpen(true);
+  };
+  const toggleAutomation = (id) => {
+    setAutomations((items) => items.map((item) => item.id === id ? { ...item, active: !item.active } : item));
+  };
+  const addAutomation = (form) => {
+    setAutomations((items) => [{
+      id: `flow-${Date.now()}`,
+      title: form.name,
+      caption: triggerCaptions[form.trigger],
+      active: form.activeAfterSave,
+      runs: 0,
+      icon: triggerIcons[form.trigger],
+      steps: buildAutomationMiniSteps(form),
+    }, ...items]);
   };
 
   return (
@@ -1115,7 +947,7 @@ function App() {
           {activeNav === "transfers" ? (
             <TransfersScreen announce={announce} />
           ) : activeNav === "autoflow" ? (
-            <AutoFlowScreen announce={announce} openDraft={openDraft} />
+            <AutoFlowScreen announce={announce} openDraft={openDraft} automations={automations} toggleAutomation={toggleAutomation} />
           ) : activeNav === "payments" ? (
             <PaymentsScreen announce={announce} />
           ) : activeNav === "store" ? (
@@ -1195,7 +1027,13 @@ function App() {
         </div>
 
         {draftOpen && activeNav === "autoflow" && (
-          <FlowDraftSheet idea={draftIdea} close={() => setDraftOpen(false)} announce={announce} />
+          <AutomationWizard
+            initialIdea={draftIdea}
+            initialPreset={draftPreset}
+            close={() => setDraftOpen(false)}
+            announce={announce}
+            onSave={addAutomation}
+          />
         )}
 
         {activeNav === "autoflow" && !draftOpen && (
