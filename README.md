@@ -5,6 +5,7 @@
 **Automate your financial routine — on your own terms.**
 
 🔗 **Live demo:** [auto-flow-ecru.vercel.app](https://auto-flow-ecru.vercel.app/)
+🎥 **Video walkthrough:** [How to use the prototype](https://www.youtube.com/shorts/ONA91pHLlJ0)
 
 An interactive prototype of the Alinma Bank app featuring a new capability called **AutoFlow**: a financial automation hub that turns a plain-language idea into a clear, step-by-step automation you can review and adjust — without the assistant ever seeing your banking data, and without executing anything until you grant permission.
 
