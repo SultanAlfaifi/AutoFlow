@@ -13,7 +13,7 @@ Built for **Hackathon Amd** (Alinma Bank × Tuwaiq Academy).
 
 ---
 
-## 💡 The Idea
+##  The Idea
 
 Bank customers repeat the same financial actions every month: moving a percentage of their salary into savings, paying bills on time, making sure their balance never drops below a safe threshold... These tasks either get forgotten or require repeated manual effort.
 
@@ -25,7 +25,7 @@ Bank customers repeat the same financial actions every month: moving a percentag
 
 ---
 
-## ✨ Highlights
+##  Highlights
 
 - **Guided automation wizard**: a focused 5-step flow (Trigger → Action → Safety → Approval → Review) — one decision per screen instead of a crowded editor.
 - **Ready-made templates**: Salary Routine, Smart Bills, Balance Guard, and Month-End Surplus — start from a trusted template and tweak it.
@@ -36,13 +36,13 @@ Bank customers repeat the same financial actions every month: moving a percentag
 
 ---
 
-## 📱 Design References
+##  Design References
 
 The [`واجهات البنك`](./واجهات%20البنك) folder contains the light and dark mode interface designs this prototype was built from.
 
 ---
 
-## 🧱 How the Automation Model Works
+##  How the Automation Model Works
 
 Every automation in AutoFlow is built from four parts, defined in [`src/main.jsx`](./src/main.jsx):
 
@@ -57,7 +57,7 @@ The wizard walks through these one at a time, then shows a single human-readable
 
 ---
 
-## 🛠️ Tech Stack
+##  Tech Stack
 
 - **React 19** + **Vite 8** — UI and build tooling
 - **lucide-react** — icons
@@ -68,7 +68,7 @@ The wizard walks through these one at a time, then shows a single human-readable
 
 ---
 
-## 🚀 Running Locally
+##  Running Locally
 
 ```bash
 # install dependencies
@@ -86,7 +86,7 @@ pnpm preview
 
 ---
 
-## 📂 Project Structure
+##  Project Structure
 
 ```
 AutoFlow/
@@ -100,6 +100,6 @@ AutoFlow/
 
 ---
 
-## 🏆 The Hackathon
+##  The Hackathon
 
 **AutoFlow** — submitted for **Hackathon Amd**, a partnership between **Alinma Bank** and **Tuwaiq Academy**.
