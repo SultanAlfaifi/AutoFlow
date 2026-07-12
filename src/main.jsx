@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import AutoFlowStudio from "./AutoFlowStudio.jsx";
 import {
   ArrowLeftRight,
   BadgeCheck,
@@ -57,6 +58,25 @@ import {
   Zap,
 } from "lucide-react";
 import "./styles.css";
+
+const sandboxBeneficiaries = [
+  { id: "plaid-savings", name: "حساب الادخار", account: "Plaid Savings •• 4321", kind: "internal" },
+  { id: "sara", name: "سارة أحمد", account: "Plaid Checking •• 1188", kind: "beneficiary" },
+  { id: "mohammed", name: "محمد علي", account: "Plaid Money Market •• 9074", kind: "beneficiary" },
+  { id: "family", name: "حساب العائلة", account: "Plaid Checking •• 5540", kind: "beneficiary" },
+];
+
+const TRANSFERS_KEY = "autoflow-sandbox-transfers-v1";
+const BILLS_KEY = "autoflow-sandbox-bills-v1";
+
+function loadLocalList(key) {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || "[]");
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
+}
 
 const quickActions = [
   { label: "دفع\nالفواتير", icon: ReceiptText },
@@ -148,7 +168,7 @@ const transferTypes = [
   },
 ];
 
-function TransfersScreen({ announce }) {
+function TransfersScreen({ announce, beneficiaries = [], transfers = [] }) {
   const [favoritesOpen, setFavoritesOpen] = useState(true);
 
   return (
@@ -170,14 +190,20 @@ function TransfersScreen({ announce }) {
           <button className="manage-link" onClick={() => announce("إدارة المستفيدين") }>إدارة</button>
         </div>
 
-        {favoritesOpen && (
+        {favoritesOpen && (beneficiaries.length ? (
+          <div className="sandbox-beneficiaries">
+            {beneficiaries.map((beneficiary) => <button type="button" className="beneficiary-card" key={beneficiary.id} onClick={() => announce(`${beneficiary.name} جاهز للتحويل الافتراضي`)}><span>{beneficiary.name.slice(0, 1)}</span><strong>{beneficiary.name}</strong><small>{beneficiary.account}</small></button>)}
+          </div>
+        ) : (
           <div className="empty-favorites">
             <div className="empty-favorites__icon"><UserRoundPlus /></div>
             <strong>لا يوجد مستفيدون مفضلون!</strong>
             <button onClick={() => announce("أضف النجمة بجانب أي مستفيد ليظهر هنا") }>كيفية الإضافة؟</button>
           </div>
-        )}
+        ))}
       </section>
+
+      {transfers.length > 0 && <section className="autoflow-transfer-history"><div className="autoflow-transfer-history__heading"><div><h2>حوالات AutoFlow</h2><span>تنفيذ افتراضي داخل البيئة التجريبية</span></div><History /></div>{transfers.map((transfer) => <div className="autoflow-transfer-row" key={transfer.id}><span className="autoflow-transfer-row__icon"><ArrowLeftRight /></span><div><strong>{transfer.beneficiaryName}</strong><small>{transfer.note} · {transfer.date}</small></div><div><b>- {new Intl.NumberFormat("ar-SA", { style: "currency", currency: transfer.currency || "USD" }).format(transfer.amount)}</b><small>مكتملة</small></div></div>)}</section>}
 
       <button className="quick-transfer-card" onClick={() => announce("الحوالة السريعة: أدخل الآيبان بدون إضافة مستفيد") }>
         <span className="quick-transfer-card__icon"><Zap /></span>
@@ -229,7 +255,7 @@ const paymentActions = [
   { title: "الفواتير الدورية", icon: Repeat2 },
 ];
 
-function PaymentsScreen({ announce }) {
+function PaymentsScreen({ announce, bills = [] }) {
   const [activeTab, setActiveTab] = useState("sadad");
   const tabs = [
     { id: "sadad", label: "سداد" },
@@ -269,10 +295,10 @@ function PaymentsScreen({ announce }) {
         ))}
       </div>
 
-      <section className="empty-bills-card">
+      {bills.length ? <section className="sandbox-bills"><header><div><h2>الفواتير والمستحقات</h2><span>أنشأتها أحداث البيئة التجريبية</span></div><ReceiptText /></header>{bills.map((bill) => <div className={`sandbox-bill ${bill.status === "paid" ? "is-paid" : "is-due"}`} key={bill.id}><span><FileText /></span><div><strong>{bill.name}</strong><small>الاستحقاق {bill.dueDate} · {bill.source}</small></div><div><b>{new Intl.NumberFormat("ar-SA", { style: "currency", currency: bill.currency || "USD" }).format(bill.amount)}</b><small>{bill.status === "paid" ? "مدفوعة" : "مستحقة"}</small></div></div>)}</section> : <section className="empty-bills-card">
         <div><FileText /><span><strong>لا توجد فواتير</strong><small>أضف فواتيرك لعرض وسداد المستحقات.</small></span></div>
         <button type="button" onClick={() => announce("إضافة أول فاتورة") }><Plus /> أضف فاتورتك الأولى</button>
-      </section>
+      </section>}
     </div>
   );
 }
@@ -845,6 +871,10 @@ function App() {
   const [draftEditingId, setDraftEditingId] = useState(null);
   const [draftOpen, setDraftOpen] = useState(false);
   const [showAutoFlowHint, setShowAutoFlowHint] = useState(true);
+  const [plaidSnapshot, setPlaidSnapshot] = useState(null);
+  const [transfers, setTransfers] = useState(() => loadLocalList(TRANSFERS_KEY));
+  const [bills, setBills] = useState(() => loadLocalList(BILLS_KEY));
+  const plaidLoaded = useRef(false);
   const [automations, setAutomations] = useState([
     {
       id: "salary-flow",
@@ -881,6 +911,9 @@ function App() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  useEffect(() => localStorage.setItem(TRANSFERS_KEY, JSON.stringify(transfers)), [transfers]);
+  useEffect(() => localStorage.setItem(BILLS_KEY, JSON.stringify(bills)), [bills]);
+
   useEffect(() => {
     const scrollArea = document.querySelector(".screen-scroll");
     if (scrollArea) scrollArea.scrollTop = 0;
@@ -890,6 +923,25 @@ function App() {
   const time = useMemo(() => new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(new Date()), []);
 
   const announce = (message) => setToast(message);
+  const refreshPlaid = async () => {
+    try {
+      const response = await fetch("/api/plaid-snapshot");
+      if (!response.ok) throw new Error("Plaid request failed");
+      setPlaidSnapshot(await response.json());
+    } catch {
+      announce("تعذر تحديث البيانات التجريبية الآن");
+    }
+  };
+
+  useEffect(() => {
+    if (plaidLoaded.current) return;
+    plaidLoaded.current = true;
+    refreshPlaid();
+  }, []);
+
+  const createTransfer = (transfer) => setTransfers((items) => [transfer, ...items].slice(0, 50));
+  const addBill = (bill) => setBills((items) => [bill, ...items].slice(0, 50));
+  const payBills = (ids) => setBills((items) => items.map((bill) => ids.includes(bill.id) ? { ...bill, status: "paid", paidAt: new Date().toISOString() } : bill));
   const openDraft = (idea, preset, editingId) => {
     setDraftIdea(idea);
     setDraftPreset(preset || null);
@@ -930,11 +982,22 @@ function App() {
 
         <div className={`screen-scroll ${activeNav === "transfers" ? "screen-scroll--transfers" : ""} ${activeNav === "autoflow" ? "screen-scroll--autoflow" : ""} ${["payments", "store", "services"].includes(activeNav) ? "screen-scroll--bank-section" : ""}`}>
           {activeNav === "transfers" ? (
-            <TransfersScreen announce={announce} />
+            <TransfersScreen announce={announce} beneficiaries={sandboxBeneficiaries} transfers={transfers} />
           ) : activeNav === "autoflow" ? (
-            <AutoFlowScreen announce={announce} openDraft={openDraft} automations={automations} toggleAutomation={toggleAutomation} />
+            <AutoFlowStudio
+              announce={announce}
+              plaidSnapshot={plaidSnapshot}
+              refreshPlaid={refreshPlaid}
+              updatePlaidSnapshot={setPlaidSnapshot}
+              beneficiaries={sandboxBeneficiaries}
+              transfers={transfers}
+              bills={bills}
+              createTransfer={createTransfer}
+              addBill={addBill}
+              payBills={payBills}
+            />
           ) : activeNav === "payments" ? (
-            <PaymentsScreen announce={announce} />
+            <PaymentsScreen announce={announce} bills={bills} />
           ) : activeNav === "store" ? (
             <StoreScreen announce={announce} />
           ) : activeNav === "services" ? (
@@ -1010,21 +1073,6 @@ function App() {
           </>
           )}
         </div>
-
-        {draftOpen && activeNav === "autoflow" && (
-          <AutomationWizard
-            initialIdea={draftIdea}
-            initialPreset={draftPreset}
-            editingId={draftEditingId}
-            close={() => setDraftOpen(false)}
-            announce={announce}
-            onSave={saveAutomation}
-          />
-        )}
-
-        {activeNav === "autoflow" && !draftOpen && (
-          <AutoFlowAssistant openDraft={openDraft} />
-        )}
 
         <nav className="bottom-nav" aria-label="التنقل الرئيسي">
           {navItems.map(({ id, label, icon: Icon, featured }) => (
