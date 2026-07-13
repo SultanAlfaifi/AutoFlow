@@ -63,6 +63,89 @@ function sanitizeAccount(account) {
   return [{ id, label, type, currency }];
 }
 
+function safeAmount(value) {
+  const amount = Number(value);
+  return Number.isFinite(amount) && amount >= 0 ? Math.round(amount * 100) / 100 : null;
+}
+
+function safeDate(value) {
+  const date = String(value || "").slice(0, 30);
+  return /^\d{4}-\d{2}-\d{2}(?:T.*)?$/.test(date) ? date : null;
+}
+
+function sanitizeTransactions(transactions, limit = 20) {
+  if (!Array.isArray(transactions)) return [];
+  return transactions.slice(0, limit).flatMap((transaction) => {
+    const amount = safeAmount(transaction?.amount);
+    const name = String(transaction?.name || "").trim().slice(0, 100);
+    if (!name || amount === null) return [];
+    return [{
+      name,
+      amount,
+      direction: transaction.direction === "inflow" ? "inflow" : "outflow",
+      currency: String(transaction.currency || "SAR").slice(0, 10),
+      date: safeDate(transaction.date),
+      pending: Boolean(transaction.pending),
+    }];
+  });
+}
+
+function sanitizeBills(bills) {
+  if (!Array.isArray(bills)) return [];
+  return bills.slice(0, 20).flatMap((bill) => {
+    const amount = safeAmount(bill?.amount);
+    const name = String(bill?.name || "").trim().slice(0, 100);
+    if (!name || amount === null || bill.status !== "due") return [];
+    return [{
+      name,
+      amount,
+      currency: String(bill.currency || "SAR").slice(0, 10),
+      due_date: safeDate(bill.dueDate),
+      status: "due",
+    }];
+  });
+}
+
+function sumByCurrency(items) {
+  return items.reduce((totals, item) => {
+    totals[item.currency] = Math.round(((totals[item.currency] || 0) + item.amount) * 100) / 100;
+    return totals;
+  }, {});
+}
+
+function buildFinancialContext(payload) {
+  const message = String(payload.message || "");
+  const snapshot = payload.financial_snapshot && typeof payload.financial_snapshot === "object" ? payload.financial_snapshot : {};
+  const asksBalance = /رصيد|balance/i.test(message);
+  const asksSalary = /راتب|دخل|salary|income/i.test(message);
+  const asksTransactions = /معاملات|عمليات|مصروف|صرف|دفعات|transactions?|spending|activity/i.test(message);
+  const asksObligations = /التزام|التزامات|فاتور|فواتير|اشتراك|مستحق|bills?|obligations?|subscriptions?/i.test(message);
+  const account = snapshot.account && typeof snapshot.account === "object" ? snapshot.account : {};
+  const confirmedDueBills = asksObligations ? sanitizeBills(payload.bills) : [];
+  const recentTransactions = sanitizeTransactions(snapshot.recentTransactions, 30);
+  const billLike = recentTransactions.filter((item) => item.direction === "outflow" && /فاتور|اشتراك|bill|subscription|telecom|electric/i.test(item.name));
+
+  return {
+    source: String(snapshot.source || "unavailable").slice(0, 40),
+    connected: Boolean(snapshot.connected),
+    synced_at: safeDate(snapshot.syncedAt),
+    account_balances: asksBalance ? {
+      available: safeAmount(account.availableBalance),
+      current: safeAmount(account.currentBalance),
+      currency: String(account.currency || "SAR").slice(0, 10),
+    } : null,
+    latest_salary: asksSalary ? (sanitizeTransactions(snapshot.latestSalary ? [{ ...snapshot.latestSalary, direction: "inflow" }] : [], 1)[0] || null) : null,
+    recent_transactions: asksTransactions ? recentTransactions : [],
+    obligations: asksObligations ? {
+      confirmed_due_bills: confirmedDueBills,
+      confirmed_due_totals: sumByCurrency(confirmedDueBills),
+      recurring_candidates: sanitizeTransactions(snapshot.insights?.recurringCandidates, 10),
+      recent_bill_like_transactions: billLike,
+      interpretation: "confirmed_due_bills are current recorded obligations. Recent transactions and recurring candidates are historical signals only, not confirmed future bills.",
+    } : null,
+  };
+}
+
 function sanitizeMessages(messages) {
   if (!Array.isArray(messages)) return [];
   return messages.slice(-12).flatMap((message) => {
@@ -153,6 +236,7 @@ export function buildModelContext(payload) {
     current_draft: state.draft,
     conversation_summary: String(payload.conversation_summary || "").slice(0, 1200),
     recent_messages: sanitizeMessages(payload.recent_messages),
+    financial_context: buildFinancialContext(payload),
     latest_user_message: String(payload.message).trim(),
     current_date: new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()),
   };

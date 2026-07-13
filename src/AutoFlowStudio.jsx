@@ -404,7 +404,7 @@ function newAssistantConversation() {
   };
 }
 
-function AutomationAssistant({ account, workflows, onDraft, openDraft }) {
+function AutomationAssistant({ account, financialSnapshot, bills, workflows, onDraft, openDraft }) {
   const [conversation, setConversation] = useState(() => {
     const stored = loadObject(AI_CONVERSATION_KEY, null);
     return stored?.conversation_id && Array.isArray(stored.messages) ? stored : newAssistantConversation();
@@ -442,6 +442,16 @@ function AutomationAssistant({ account, workflows, onDraft, openDraft }) {
           message,
           state: conversation.state,
           account: account ? { id: account.id, name: account.name, type: account.type, currency: account.currency } : null,
+          financial_snapshot: financialSnapshot ? {
+            source: financialSnapshot.source,
+            connected: financialSnapshot.connected,
+            syncedAt: financialSnapshot.syncedAt,
+            account: financialSnapshot.account,
+            latestSalary: financialSnapshot.latestSalary,
+            recentTransactions: financialSnapshot.recentTransactions?.slice(0, 30) || [],
+            insights: { recurringCandidates: financialSnapshot.insights?.recurringCandidates?.slice(0, 10) || [] },
+          } : null,
+          bills: bills?.slice(0, 20) || [],
           conversation_summary: "",
           recent_messages: recentMessages,
         }),
@@ -744,7 +754,7 @@ export default function AutoFlowStudio({ announce, plaidSnapshot, refreshPlaid, 
   return <div className="shortcut-studio">
     <header className="shortcut-studio__header"><div><span className="shortcut-logo"><Workflow /></span><div><h1>AutoFlow</h1><span><i /> البيانات التجريبية متصلة</span></div></div><button type="button" onClick={newWorkflow}><Plus /> أتمتة جديدة</button></header>
 
-    <AutomationAssistant account={plaidSnapshot?.account} workflows={workflows} onDraft={saveAiDraft} openDraft={openDraftById} />
+    <AutomationAssistant account={plaidSnapshot?.account} financialSnapshot={plaidSnapshot} bills={bills} workflows={workflows} onDraft={saveAiDraft} openDraft={openDraftById} />
 
     {!workflows.length ? <section className="automation-empty-state">
       <span className="automation-empty-state__icon"><Sparkles /></span>
