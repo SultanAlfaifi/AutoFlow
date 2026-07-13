@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import AutoFlowStudio from "./AutoFlowStudio.jsx";
+import { SANDBOX_BENEFICIARIES } from "./automationContract.js";
 import {
   ArrowLeftRight,
   BadgeCheck,
@@ -58,13 +59,6 @@ import {
   Zap,
 } from "lucide-react";
 import "./styles.css";
-
-const sandboxBeneficiaries = [
-  { id: "plaid-savings", name: "حساب الادخار", account: "Plaid Savings •• 4321", kind: "internal" },
-  { id: "sara", name: "سارة أحمد", account: "Plaid Checking •• 1188", kind: "beneficiary" },
-  { id: "mohammed", name: "محمد علي", account: "Plaid Money Market •• 9074", kind: "beneficiary" },
-  { id: "family", name: "حساب العائلة", account: "Plaid Checking •• 5540", kind: "beneficiary" },
-];
 
 const TRANSFERS_KEY = "autoflow-sandbox-transfers-v1";
 const BILLS_KEY = "autoflow-sandbox-bills-v1";
@@ -982,14 +976,14 @@ function App() {
 
         <div className={`screen-scroll ${activeNav === "transfers" ? "screen-scroll--transfers" : ""} ${activeNav === "autoflow" ? "screen-scroll--autoflow" : ""} ${["payments", "store", "services"].includes(activeNav) ? "screen-scroll--bank-section" : ""}`}>
           {activeNav === "transfers" ? (
-            <TransfersScreen announce={announce} beneficiaries={sandboxBeneficiaries} transfers={transfers} />
+            <TransfersScreen announce={announce} beneficiaries={SANDBOX_BENEFICIARIES} transfers={transfers} />
           ) : activeNav === "autoflow" ? (
             <AutoFlowStudio
               announce={announce}
               plaidSnapshot={plaidSnapshot}
               refreshPlaid={refreshPlaid}
               updatePlaidSnapshot={setPlaidSnapshot}
-              beneficiaries={sandboxBeneficiaries}
+              beneficiaries={SANDBOX_BENEFICIARIES}
               transfers={transfers}
               bills={bills}
               createTransfer={createTransfer}
