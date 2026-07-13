@@ -19,6 +19,14 @@ export default defineConfig(({ mode }) => {
             const { default: handler } = await import("./api/automation-assistant.js");
             await handler(request, response);
           });
+          server.middlewares.use("/api/automation-draft", async (request, response) => {
+            const { default: handler } = await import("./api/automation-draft.js");
+            await handler(request, response);
+          });
+          server.middlewares.use("/api/openai/realtime/session", async (request, response) => {
+            const { default: handler } = await import("./api/openai/realtime/session.js");
+            await handler(request, response);
+          });
           server.middlewares.use("/api/automation-publish", async (request, response) => {
             const { default: handler } = await import("./api/automation-publish.js");
             await handler(request, response);
