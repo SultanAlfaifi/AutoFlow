@@ -35,6 +35,7 @@ import {
   Zap,
 } from "lucide-react";
 import { actionNeedsApproval, evaluateSafety, evaluateWorkflow, resolveActionAmount } from "./workflowEngine.js";
+import VoiceAssistant from "./VoiceAssistant.jsx";
 import {
   ACTION_TYPES,
   AUTOMATION_CATEGORIES,
@@ -182,6 +183,15 @@ function actionSummary(action) {
     ? `${action.value}${action.amountMode === "percent" ? "%" : " ريال"}`
     : "";
   return [actionLabel(action), amount, destination].filter(Boolean).join(" · ");
+}
+
+function actionSafetySummary(action) {
+  const limits = [];
+  if (action.safety?.minBalanceOn) limits.push(`أقل رصيد ${action.safety.minBalance} ريال`);
+  if (action.safety?.maxAmountOn) limits.push(`أعلى تحويل ${action.safety.maxAmount} ريال`);
+  if (action.safety?.dailyLimitOn) limits.push(`الحد اليومي ${action.safety.dailyLimit} ريال`);
+  if (action.safety?.hoursOn) limits.push(`ساعات التنفيذ ${action.safety.startHour}:00–${action.safety.endHour}:00`);
+  return limits;
 }
 
 function automationColor(colorId) {
@@ -376,7 +386,16 @@ function ShortcutEditor({ workflow, beneficiaries, account, metadata, close, sav
   );
 }
 
-function SafetySetting({ label, help, checked, value, onToggle, onValue, isHours = false, onHours }) {
+function SafetySetting({
+  label,
+  help,
+  checked,
+  value,
+  onToggle,
+  onValue = /** @type {(value: any) => void} */ (() => {}),
+  isHours = false,
+  onHours = /** @type {(start: any, end: any) => void} */ (() => {}),
+}) {
   const [start = "6", end = "23"] = String(value).split("-");
   return <div className={`safety-setting ${checked ? "is-on" : ""}`}><label><input type="checkbox" checked={checked} onChange={(event) => onToggle(event.target.checked)} /><span><strong>{label}</strong><small>{help}</small></span></label>{checked && (isHours ? <div className="hour-fields"><input aria-label="ساعة البداية" type="number" min="0" max="23" value={start} onChange={(event) => onHours(event.target.value, end)} /><b>إلى</b><input aria-label="ساعة النهاية" type="number" min="1" max="24" value={end} onChange={(event) => onHours(start, event.target.value)} /></div> : <input aria-label={label} type="number" min="0" value={value} onChange={(event) => onValue(event.target.value)} />)}</div>;
 }
@@ -405,7 +424,7 @@ function newAssistantConversation() {
   };
 }
 
-function AutomationAssistant({ account, financialSnapshot, bills, workflows, onDraft, openDraft }) {
+function AutomationAssistant({ account, financialSnapshot, bills, workflows, workflowMetadata, onDraft, openDraft }) {
   const [conversation, setConversation] = useState(() => {
     const stored = loadObject(AI_CONVERSATION_KEY, null);
     return stored?.conversation_id && Array.isArray(stored.messages) ? stored : newAssistantConversation();
@@ -414,6 +433,7 @@ function AutomationAssistant({ account, financialSnapshot, bills, workflows, onD
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [selectedReplies, setSelectedReplies] = useState([]);
+  const [mode, setMode] = useState("text");
 
   useEffect(() => localStorage.setItem(AI_CONVERSATION_KEY, JSON.stringify(conversation)), [conversation]);
   useEffect(() => {
@@ -422,6 +442,18 @@ function AutomationAssistant({ account, financialSnapshot, bills, workflows, onD
     if (JSON.stringify(currentWorkflow) === JSON.stringify(conversation.state?.draft)) return;
     setConversation((current) => ({ ...current, state: { ...current.state, draft: currentWorkflow } }));
   }, [workflows, conversation.conversation_id]);
+
+  const resetConversation = () => {
+    setConversation(newAssistantConversation());
+    setError("");
+    setInput("");
+    setSelectedReplies([]);
+  };
+
+  const acceptDraft = (automation, metadata) => {
+    setConversation((current) => ({ ...current, state: { ...current.state, draft: automation } }));
+    onDraft(automation, metadata, { openReview: mode === "text" });
+  };
 
   const submitMessage = async (rawMessage) => {
     const message = String(rawMessage || "").trim();
@@ -454,8 +486,9 @@ function AutomationAssistant({ account, financialSnapshot, bills, workflows, onD
           } : null,
           bills: bills?.slice(0, 20) || [],
           conversation_summary: "",
-          recent_messages: recentMessages,
-        }),
+           recent_messages: recentMessages,
+           current_metadata: workflowMetadata?.[conversation.state?.draft?.id] || null,
+         }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "تعذر تشغيل المساعد الآن");
@@ -467,7 +500,7 @@ function AutomationAssistant({ account, financialSnapshot, bills, workflows, onD
         quick_replies: result.quick_replies || [],
         quick_reply_mode: result.quick_reply_mode || "single",
       }));
-      if (result.action === "create_draft" && result.automation) onDraft(result.automation);
+      if (result.action === "create_draft" && result.automation) acceptDraft(result.automation, result.metadata);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -477,8 +510,13 @@ function AutomationAssistant({ account, financialSnapshot, bills, workflows, onD
 
   const draft = conversation.state?.draft;
   return <section className="automation-assistant" aria-label="مساعد إنشاء الأتمتة">
-    <header><span><MessageCircle /></span><div><small>مساعد AutoFlow الذكي</small><h2>أنشئها بلغتك</h2></div><button type="button" onClick={() => { setConversation(newAssistantConversation()); setError(""); setInput(""); setSelectedReplies([]); }} title="بدء محادثة جديدة"><RotateCcw /> محادثة جديدة</button></header>
-    <div className="automation-assistant__messages" aria-live="polite">
+    <header><span><MessageCircle /></span><div><small>مساعد AutoFlow الذكي</small><h2>أنشئها بطريقتك</h2></div><button type="button" onClick={resetConversation} title="بدء محادثة جديدة"><RotateCcw /> محادثة جديدة</button></header>
+    <div className="assistant-mode-tabs" role="tablist" aria-label="طريقة إنشاء الأتمتة">
+      <button type="button" role="tab" aria-selected={mode === "text"} className={mode === "text" ? "is-active" : ""} onClick={() => setMode("text")}>اكتب ما تريد</button>
+      <button type="button" role="tab" aria-selected={mode === "voice"} className={mode === "voice" ? "is-active" : ""} onClick={() => setMode("voice")}>تحدث مع AutoFlow</button>
+    </div>
+    {mode === "text" ? <>
+    <div className="automation-assistant__messages" aria-live="polite" role="log">
       {conversation.messages.map((message) => <div key={message.id} className={`assistant-message assistant-message--${message.role}`}><span>{message.content}</span></div>)}
       {busy && <div className="assistant-message assistant-message--assistant assistant-message--loading"><i /><i /><i /><span>أجهز المسودة الآمنة…</span></div>}
     </div>
@@ -493,6 +531,19 @@ function AutomationAssistant({ account, financialSnapshot, bills, workflows, onD
       <button type="submit" disabled={busy || !input.trim()} aria-label="إرسال"><Send /></button>
     </form>
     <footer><ShieldCheck /><span>ينشئ مسودة غير مفعلة فقط. النشر يتم يدويًا بعد المراجعة.</span></footer>
+    </> : <VoiceAssistant
+      key={conversation.conversation_id}
+      conversationId={conversation.conversation_id}
+      draft={draft}
+      metadata={workflowMetadata?.[draft?.id] || null}
+      account={account}
+      conditionLabels={draft ? draft.conditions.map(conditionLabel) : []}
+      actionLabels={draft ? draft.actions.map(actionSummary) : []}
+      safetyLabels={draft ? draft.actions.flatMap(actionSafetySummary) : []}
+      onDraft={acceptDraft}
+      onReview={openDraft}
+      onReset={resetConversation}
+    />}
   </section>;
 }
 
@@ -671,11 +722,11 @@ export default function AutoFlowStudio({ announce, plaidSnapshot, refreshPlaid, 
     announce("تم حفظ الاختصار وتفعيله");
   };
 
-  const saveAiDraft = (workflow) => {
+  const saveAiDraft = (workflow, serverMetadata = null, options = {}) => {
     const inactiveDraft = { ...workflow, active: false, runs: 0 };
     setWorkflows((items) => upsertWorkflow(items, inactiveDraft));
-    setWorkflowMetadata((items) => ({ ...items, [workflow.id]: createAiMetadata(items[workflow.id]) }));
-    setEditor(inactiveDraft);
+    setWorkflowMetadata((items) => ({ ...items, [workflow.id]: createAiMetadata({ ...items[workflow.id], ...serverMetadata }) }));
+    if (options.openReview) setEditor(inactiveDraft);
     announce("جهزت لك مسودة غير مفعلة للمراجعة");
   };
 
@@ -755,7 +806,7 @@ export default function AutoFlowStudio({ announce, plaidSnapshot, refreshPlaid, 
   return <div className="shortcut-studio">
     <header className="shortcut-studio__header"><div><span className="shortcut-logo"><Workflow /></span><div><h1>AutoFlow</h1><span><i /> البيانات التجريبية متصلة</span></div></div><button type="button" onClick={newWorkflow}><Plus /> أتمتة جديدة</button></header>
 
-    <AutomationAssistant account={plaidSnapshot?.account} financialSnapshot={plaidSnapshot} bills={bills} workflows={workflows} onDraft={saveAiDraft} openDraft={openDraftById} />
+    <AutomationAssistant account={plaidSnapshot?.account} financialSnapshot={plaidSnapshot} bills={bills} workflows={workflows} workflowMetadata={workflowMetadata} onDraft={saveAiDraft} openDraft={openDraftById} />
 
     {!workflows.length ? <section className="automation-empty-state">
       <span className="automation-empty-state__icon"><Sparkles /></span>

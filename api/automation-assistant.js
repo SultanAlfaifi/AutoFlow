@@ -11,12 +11,12 @@ import {
   getAssistantQuickReplies,
   isAssistantPublishAttempt,
   isPromptExtractionAttempt,
-  normalizeAssistantAutomation,
   normalizeWorkflowShape,
   validateAssistantEnvelope,
   validateAutomation,
 } from "../src/automationContract.js";
 import { AUTOMATION_ASSISTANT_SYSTEM_PROMPT } from "../src/automationAssistantPrompt.js";
+import { createOrUpdateAutomationDraft } from "../server/automationDraftEngine.js";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const MAX_BODY_BYTES = 64 * 1024;
@@ -289,10 +289,22 @@ export function extractResponseText(response) {
   throw new Error("لم تُرجع OpenAI نصًا منظمًا");
 }
 
+function enforceDraftSecurity(envelope, currentDraft) {
+  if (!envelope?.automation || typeof envelope.automation !== "object") return envelope;
+  return {
+    ...envelope,
+    automation: {
+      ...envelope.automation,
+      active: false,
+      runs: currentDraft?.runs || 0,
+    },
+  };
+}
+
 async function callOpenAI(requestBody, fetchImpl = fetch) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    const error = new Error("OPENAI_API_KEY غير مضبوط على الخادم");
+    const error = new Error("المساعد الذكي غير مفعّل حاليًا. أضف مفتاح OpenAI في إعدادات الخادم.");
     error.statusCode = 503;
     throw error;
   }
@@ -370,7 +382,7 @@ export async function generateAssistantResult(payload, fetchImpl = fetch) {
   let envelope;
   let issues;
   try {
-    envelope = JSON.parse(extractResponseText(openAIResponse));
+    envelope = enforceDraftSecurity(JSON.parse(extractResponseText(openAIResponse)), context.current_draft);
     issues = validateAssistantEnvelope(envelope, { beneficiaries: SANDBOX_BENEFICIARIES, requireZeroRuns: !context.current_draft });
   } catch (error) {
     issues = [{ path: "response", message: error.message, kind: "structure" }];
@@ -378,7 +390,7 @@ export async function generateAssistantResult(payload, fetchImpl = fetch) {
 
   if (issues.length && issues.every((item) => item.kind === "structure")) {
     openAIResponse = await callOpenAI(buildOpenAIRequest(context, issues), fetchImpl);
-    envelope = JSON.parse(extractResponseText(openAIResponse));
+    envelope = enforceDraftSecurity(JSON.parse(extractResponseText(openAIResponse)), context.current_draft);
     issues = validateAssistantEnvelope(envelope, { beneficiaries: SANDBOX_BENEFICIARIES, requireZeroRuns: !context.current_draft });
   }
   if (issues.length) {
@@ -388,18 +400,19 @@ export async function generateAssistantResult(payload, fetchImpl = fetch) {
     throw error;
   }
 
+  let draftResult = null;
   if (envelope.action === "create_draft") {
     const shouldExplainSafety = envelope.automation.actions.some((action) => ["save", "internal-transfer", "beneficiary-transfer", "split"].includes(action.type)
       && action.amountMode === "fixed" && Number(action.value) > 0 && !action.safety.maxAmountOn);
-    envelope.automation = normalizeAssistantAutomation(envelope.automation, payload.conversation_id, context.current_draft);
+    draftResult = createOrUpdateAutomationDraft({
+      operation: context.current_draft ? "update" : "create",
+      conversationId: payload.conversation_id,
+      candidate: envelope.automation,
+      currentDraft: context.current_draft,
+      currentMetadata: payload.current_metadata,
+    });
+    envelope.automation = draftResult.automation;
     if (shouldExplainSafety) envelope.assistant_message = `${envelope.assistant_message} أضفت حدًا أعلى آمنًا يساوي مبلغ كل تحويل ثابت.`;
-    const normalizedIssues = validateAutomation(envelope.automation, { source: "ai", beneficiaries: SANDBOX_BENEFICIARIES, requireZeroRuns: !context.current_draft });
-    if (normalizedIssues.length) {
-      const error = new Error("المسودة بعد التطبيع لم تجتز تحقق AutoFlow");
-      error.statusCode = 422;
-      error.details = normalizedIssues;
-      throw error;
-    }
   }
 
   const previousState = sanitizeState(payload.state);
@@ -419,6 +432,7 @@ export async function generateAssistantResult(payload, fetchImpl = fetch) {
     quick_replies: getAssistantQuickReplies(envelope.missing_fields),
     quick_reply_mode: getAssistantQuickReplyMode(envelope.missing_fields, message),
     state: nextState,
+    ...(draftResult ? { metadata: draftResult.metadata, security: draftResult.security } : {}),
     schema_version: AUTOMATION_SCHEMA_VERSION,
   };
 }
