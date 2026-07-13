@@ -25,6 +25,7 @@ import {
   generateAssistantResult,
 } from "../api/automation-assistant.js";
 import { publishAiDraft } from "../api/automation-publish.js";
+import { convertPlaidAmountToSar } from "../api/plaid-snapshot.js";
 
 function validDraft(overrides = {}) {
   return {
@@ -352,4 +353,78 @@ test("33. UI gates the review banner and review-save behavior on review status",
   assert.match(source, /const isAiDraft = requiresAiReview\(metadata\)/);
   assert.match(source, /if \(requiresAiReview\(metadata\)\)/);
   assert.match(source, /actionSummary\(action\)/);
+});
+
+test("34. Plaid context exposes only question-relevant financial data", () => {
+  const payload = assistantPayload("وش رصيدي الآن؟");
+  payload.financial_snapshot = {
+    source: "plaid-sandbox",
+    connected: true,
+    syncedAt: "2026-07-13T09:00:00.000Z",
+    account: { currentBalance: 1200, availableBalance: 1000, currency: "SAR" },
+    latestSalary: { name: "راتب", amount: 8500, currency: "SAR", date: "2026-07-01" },
+    recentTransactions: [{ name: "عملية حساسة غير مطلوبة", amount: 500, direction: "outflow", currency: "SAR", date: "2026-07-12" }],
+  };
+  const context = buildModelContext(payload);
+  assert.deepEqual(context.financial_context.account_balances, { available: 1000, current: 1200, currency: "SAR" });
+  assert.equal(context.financial_context.latest_salary, null);
+  assert.deepEqual(context.financial_context.recent_transactions, []);
+  assert.equal(context.financial_context.obligations, null);
+});
+
+test("35. obligation questions receive confirmed bills and distinguish historical bill payments", () => {
+  const payload = assistantPayload("ايش علي من التزامات الآن؟");
+  payload.bills = [
+    { id: "private-id", name: "فاتورة الكهرباء", amount: 120, currency: "SAR", dueDate: "2026-07-20", status: "due", source: "Plaid Sandbox" },
+    { id: "paid-id", name: "فاتورة سابقة", amount: 80, currency: "SAR", dueDate: "2026-06-20", status: "paid" },
+  ];
+  payload.financial_snapshot = {
+    source: "demo",
+    connected: false,
+    recentTransactions: [{ id: "transaction-id", name: "فاتورة الاتصالات", amount: 172.5, direction: "outflow", currency: "SAR", date: "2026-07-07" }],
+    insights: { recurringCandidates: [] },
+  };
+  const obligations = buildModelContext(payload).financial_context.obligations;
+  assert.deepEqual(obligations.confirmed_due_totals, { SAR: 120 });
+  assert.deepEqual(obligations.confirmed_due_bills, [{ name: "فاتورة الكهرباء", amount: 120, currency: "SAR", due_date: "2026-07-20", status: "due" }]);
+  assert.equal(obligations.recent_bill_like_transactions[0].name, "فاتورة الاتصالات");
+  assert.equal("id" in obligations.confirmed_due_bills[0], false);
+});
+
+test("36. frontend sends bounded Plaid and bill context to the backend assistant", async () => {
+  const source = await readFile(new URL("../src/AutoFlowStudio.jsx", import.meta.url), "utf8");
+  assert.match(source, /financial_snapshot: financialSnapshot/);
+  assert.match(source, /recentTransactions\?\.slice\(0, 30\)/);
+  assert.match(source, /bills: bills\?\.slice\(0, 20\)/);
+});
+
+test("37. a foreign-currency request is stopped once without asking for an exchange rate", async () => {
+  let openAiCalls = 0;
+  const payload = assistantPayload("بالدولار حولي");
+  const result = await generateAssistantResult(payload, async () => {
+    openAiCalls += 1;
+    throw new Error("OpenAI should not be called for an unsupported currency mismatch");
+  });
+  assert.equal(openAiCalls, 0);
+  assert.equal(result.action, "unsupported_request");
+  assert.equal(result.automation, null);
+  assert.match(result.assistant_message, /لا يدعم صرف العملات/);
+  assert.doesNotMatch(result.assistant_message, /سعر صرف.*حدد|كم مبلغ/);
+  assert.deepEqual(result.quick_replies.map((reply) => reply.label), ["استخدم الريال السعودي"]);
+});
+
+test("38. a transfer in the connected account currency still reaches the model", async () => {
+  const result = await generateAssistantResult(assistantPayload("حوّل 1000 ريال كل خميس الساعة 6 مساء"), mockOpenAI([{
+    action: "ask_clarification",
+    assistant_message: "إلى أي مستفيد تريد التحويل؟",
+    missing_fields: [{ path: "actions[0].beneficiaryId", question: "ما المستفيد؟" }],
+    automation: null,
+  }]));
+  assert.equal(result.action, "ask_clarification");
+});
+
+test("39. Plaid sandbox USD values are converted to SAR amounts, not relabeled", () => {
+  assert.equal(convertPlaidAmountToSar(100, "USD"), 375);
+  assert.equal(convertPlaidAmountToSar(244.33, "USD"), 916.24);
+  assert.equal(convertPlaidAmountToSar(120, "SAR"), 120);
 });

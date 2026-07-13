@@ -63,6 +63,100 @@ function sanitizeAccount(account) {
   return [{ id, label, type, currency }];
 }
 
+function safeAmount(value) {
+  const amount = Number(value);
+  return Number.isFinite(amount) && amount >= 0 ? Math.round(amount * 100) / 100 : null;
+}
+
+function safeDate(value) {
+  const date = String(value || "").slice(0, 30);
+  return /^\d{4}-\d{2}-\d{2}(?:T.*)?$/.test(date) ? date : null;
+}
+
+function sanitizeTransactions(transactions, limit = 20) {
+  if (!Array.isArray(transactions)) return [];
+  return transactions.slice(0, limit).flatMap((transaction) => {
+    const amount = safeAmount(transaction?.amount);
+    const name = String(transaction?.name || "").trim().slice(0, 100);
+    if (!name || amount === null) return [];
+    return [{
+      name,
+      amount,
+      direction: transaction.direction === "inflow" ? "inflow" : "outflow",
+      currency: String(transaction.currency || "SAR").slice(0, 10),
+      date: safeDate(transaction.date),
+      pending: Boolean(transaction.pending),
+    }];
+  });
+}
+
+function sanitizeBills(bills) {
+  if (!Array.isArray(bills)) return [];
+  return bills.slice(0, 20).flatMap((bill) => {
+    const amount = safeAmount(bill?.amount);
+    const name = String(bill?.name || "").trim().slice(0, 100);
+    if (!name || amount === null || bill.status !== "due") return [];
+    return [{
+      name,
+      amount,
+      currency: String(bill.currency || "SAR").slice(0, 10),
+      due_date: safeDate(bill.dueDate),
+      status: "due",
+    }];
+  });
+}
+
+function sumByCurrency(items) {
+  return items.reduce((totals, item) => {
+    totals[item.currency] = Math.round(((totals[item.currency] || 0) + item.amount) * 100) / 100;
+    return totals;
+  }, {});
+}
+
+function buildFinancialContext(payload) {
+  const message = String(payload.message || "");
+  const snapshot = payload.financial_snapshot && typeof payload.financial_snapshot === "object" ? payload.financial_snapshot : {};
+  const asksBalance = /رصيد|balance/i.test(message);
+  const asksSalary = /راتب|دخل|salary|income/i.test(message);
+  const asksTransactions = /معاملات|عمليات|مصروف|صرف|دفعات|transactions?|spending|activity/i.test(message);
+  const asksObligations = /التزام|التزامات|فاتور|فواتير|اشتراك|مستحق|bills?|obligations?|subscriptions?/i.test(message);
+  const account = snapshot.account && typeof snapshot.account === "object" ? snapshot.account : {};
+  const confirmedDueBills = asksObligations ? sanitizeBills(payload.bills) : [];
+  const recentTransactions = sanitizeTransactions(snapshot.recentTransactions, 30);
+  const billLike = recentTransactions.filter((item) => item.direction === "outflow" && /فاتور|اشتراك|bill|subscription|telecom|electric/i.test(item.name));
+
+  return {
+    source: String(snapshot.source || "unavailable").slice(0, 40),
+    connected: Boolean(snapshot.connected),
+    synced_at: safeDate(snapshot.syncedAt),
+    account_balances: asksBalance ? {
+      available: safeAmount(account.availableBalance),
+      current: safeAmount(account.currentBalance),
+      currency: String(account.currency || "SAR").slice(0, 10),
+    } : null,
+    latest_salary: asksSalary ? (sanitizeTransactions(snapshot.latestSalary ? [{ ...snapshot.latestSalary, direction: "inflow" }] : [], 1)[0] || null) : null,
+    recent_transactions: asksTransactions ? recentTransactions : [],
+    obligations: asksObligations ? {
+      confirmed_due_bills: confirmedDueBills,
+      confirmed_due_totals: sumByCurrency(confirmedDueBills),
+      recurring_candidates: sanitizeTransactions(snapshot.insights?.recurringCandidates, 10),
+      recent_bill_like_transactions: billLike,
+      interpretation: "confirmed_due_bills are current recorded obligations. Recent transactions and recurring candidates are historical signals only, not confirmed future bills.",
+    } : null,
+  };
+}
+
+function detectUnsupportedCurrencyRequest(payload) {
+  const message = String(payload.message || "");
+  const accountCurrency = String(payload.account?.currency || payload.financial_snapshot?.account?.currency || "SAR").toUpperCase();
+  const requestedCurrency = /دولار|\bUSD\b|\$/iu.test(message)
+    ? "USD"
+    : /ريال|ر\.س|\bSAR\b/iu.test(message) ? "SAR" : null;
+  const concernsMoney = /حو[ّ]?ل|تحويل|صرف|بد[ّ]?ل|عملة|مبلغ|دولار|ريال|\b(?:USD|SAR)\b|\$/iu.test(message);
+  if (!requestedCurrency || !concernsMoney || requestedCurrency === accountCurrency) return null;
+  return { accountCurrency, requestedCurrency };
+}
+
 function sanitizeMessages(messages) {
   if (!Array.isArray(messages)) return [];
   return messages.slice(-12).flatMap((message) => {
@@ -153,6 +247,7 @@ export function buildModelContext(payload) {
     current_draft: state.draft,
     conversation_summary: String(payload.conversation_summary || "").slice(0, 1200),
     recent_messages: sanitizeMessages(payload.recent_messages),
+    financial_context: buildFinancialContext(payload),
     latest_user_message: String(payload.message).trim(),
     current_date: new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()),
   };
@@ -253,6 +348,22 @@ export async function generateAssistantResult(payload, fetchImpl = fetch) {
     state: sanitizeState(payload.state),
     schema_version: AUTOMATION_SCHEMA_VERSION,
   };
+
+  const currencyMismatch = detectUnsupportedCurrencyRequest(payload);
+  if (currencyMismatch) {
+    const accountCurrencyLabel = currencyMismatch.accountCurrency === "SAR" ? "الريال السعودي" : currencyMismatch.accountCurrency;
+    const requestedCurrencyLabel = currencyMismatch.requestedCurrency === "USD" ? "الدولار الأمريكي" : currencyMismatch.requestedCurrency;
+    return {
+      action: "unsupported_request",
+      assistant_message: `فهمت أنك تريد التحويل بـ${requestedCurrencyLabel}. حسابك المتصل يعمل بـ${accountCurrencyLabel}، وAutoFlow الحالي لا يدعم صرف العملات أو تثبيت سعر صرف داخل الأتمتة. أستطيع تجهيز نفس التحويل بعملة الحساب المتصل دون تغيير بقية التفاصيل.`,
+      missing_fields: [],
+      automation: null,
+      quick_replies: [{ id: `currency-${currencyMismatch.accountCurrency.toLowerCase()}`, label: `استخدم ${accountCurrencyLabel}`, value: `استخدم عملة الحساب المتصل ${currencyMismatch.accountCurrency} وحافظ على المبلغ والموعد وبقية التفاصيل التي ذكرتها` }],
+      quick_reply_mode: "single",
+      state: sanitizeState(payload.state),
+      schema_version: AUTOMATION_SCHEMA_VERSION,
+    };
+  }
 
   const context = buildModelContext(payload);
   let openAIResponse = await callOpenAI(buildOpenAIRequest(context), fetchImpl);

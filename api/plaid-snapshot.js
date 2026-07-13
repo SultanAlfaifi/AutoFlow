@@ -5,6 +5,19 @@ const PLAID_HOSTS = {
 };
 
 let sandboxAccessToken = null;
+const USD_TO_SAR = 3.75;
+
+export function convertPlaidAmountToSar(amount, currency) {
+  const numericAmount = Number(amount || 0);
+  return String(currency || "").toUpperCase() === "USD"
+    ? Math.round(numericAmount * USD_TO_SAR * 100) / 100
+    : numericAmount;
+}
+
+function normalizeTransactionToSar(transaction) {
+  if (transaction.currency !== "USD") return transaction;
+  return { ...transaction, amount: convertPlaidAmountToSar(transaction.amount, transaction.currency), currency: "SAR" };
+}
 
 const demoSnapshot = {
   source: "demo",
@@ -145,9 +158,11 @@ export async function getPlaidSnapshot() {
 
   const transactions = transactionData
     .map(normalizeTransaction)
+    .map(normalizeTransactionToSar)
     .sort((a, b) => String(b.date).localeCompare(String(a.date)));
   const checking = balanceData.accounts.find((account) => account.type === "depository") || balanceData.accounts[0];
-  const currency = checking?.balances?.iso_currency_code || checking?.balances?.unofficial_currency_code || "USD";
+  const plaidCurrency = checking?.balances?.iso_currency_code || checking?.balances?.unofficial_currency_code || "USD";
+  const currency = plaidCurrency === "USD" ? "SAR" : plaidCurrency;
 
   return {
     source: "plaid-sandbox",
@@ -158,8 +173,8 @@ export async function getPlaidSnapshot() {
       name: checking.name,
       type: checking.type,
       currency,
-      currentBalance: checking.balances.current,
-      availableBalance: checking.balances.available,
+      currentBalance: convertPlaidAmountToSar(checking.balances.current, plaidCurrency),
+      availableBalance: convertPlaidAmountToSar(checking.balances.available, plaidCurrency),
     } : demoSnapshot.account,
     latestSalary: findSalary(transactions),
     recentTransactions: transactions.slice(0, 100),
@@ -177,8 +192,10 @@ async function readRequestBody(request) {
 async function createSandboxEvent(payload) {
   const accessToken = await getSandboxAccessToken();
   const today = new Date().toISOString().slice(0, 10);
-  const amount = Math.abs(Number(payload.amount || 0));
-  if (!amount || amount > 1000000) throw new Error("قيمة المعاملة غير صالحة");
+  const displayAmount = Math.abs(Number(payload.amount || 0));
+  if (!displayAmount || displayAmount > 1000000) throw new Error("قيمة المعاملة غير صالحة");
+  const payloadCurrency = String(payload.currency || "SAR").toUpperCase();
+  const amount = payloadCurrency === "SAR" ? Math.round((displayAmount / USD_TO_SAR) * 100) / 100 : displayAmount;
 
   const isIncome = payload.action === "inject-salary" || payload.direction === "inflow";
   await plaidRequest("/sandbox/transactions/create", {
@@ -188,7 +205,7 @@ async function createSandboxEvent(payload) {
       date_posted: today,
       date_transacted: today,
       description: payload.description || (isIncome ? "AutoFlow Payroll Deposit" : "AutoFlow Approved Action"),
-      iso_currency_code: payload.currency || "USD",
+      iso_currency_code: payloadCurrency === "SAR" ? "USD" : payloadCurrency,
     }],
   });
 
