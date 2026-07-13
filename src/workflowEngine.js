@@ -5,7 +5,52 @@ function compareAmount(amount, operator, value) {
   return true;
 }
 
+const WEEKDAY_FROM_SHORT = { Sun: "sun", Mon: "mon", Tue: "tue", Wed: "wed", Thu: "thu", Fri: "fri", Sat: "sat" };
+
+function zonedClock(now, timezone) {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone || "Asia/Riyadh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    weekday: "short",
+    hourCycle: "h23",
+  });
+  const parts = Object.fromEntries(formatter.formatToParts(now).map((part) => [part.type, part.value]));
+  return {
+    date: `${parts.year}-${parts.month}-${parts.day}`,
+    time: `${parts.hour}:${parts.minute}`,
+    dayOfMonth: Number(parts.day),
+    weekday: WEEKDAY_FROM_SHORT[parts.weekday],
+  };
+}
+
+export function resolveScheduledCondition(condition, now = new Date()) {
+  if (condition?.type !== "scheduled" || Number.isNaN(new Date(now).getTime())) return null;
+  const schedule = condition.schedule || {};
+  const clock = zonedClock(new Date(now), schedule.timezone);
+  let matches = false;
+  let occurrence = `${clock.date}T${schedule.time}`;
+
+  if (schedule.mode === "once") {
+    occurrence = `${schedule.date}T${schedule.time}`;
+    matches = `${clock.date}T${clock.time}` >= occurrence;
+  } else if (schedule.mode === "daily") {
+    matches = clock.time === schedule.time;
+  } else if (schedule.mode === "weekly") {
+    matches = clock.time === schedule.time && schedule.weekdays?.includes(clock.weekday);
+  } else if (schedule.mode === "monthly") {
+    matches = clock.time === schedule.time && clock.dayOfMonth === Number(schedule.dayOfMonth);
+  }
+
+  if (!matches) return null;
+  return { id: `scheduled-${schedule.mode}-${occurrence}`, type: "scheduled", amount: 0, label: `موعد ${occurrence}` };
+}
+
 function resolveCondition(condition, eventFacts, context) {
+  if (condition.type === "scheduled") return resolveScheduledCondition(condition, context.now || new Date());
   if (condition.type === "balance-below") {
     const balance = Number(context.balance || 0);
     if (balance > Number(condition.value || 0)) return null;
