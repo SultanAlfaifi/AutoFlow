@@ -146,6 +146,17 @@ function buildFinancialContext(payload) {
   };
 }
 
+function detectUnsupportedCurrencyRequest(payload) {
+  const message = String(payload.message || "");
+  const accountCurrency = String(payload.account?.currency || payload.financial_snapshot?.account?.currency || "SAR").toUpperCase();
+  const requestedCurrency = /دولار|\bUSD\b|\$/iu.test(message)
+    ? "USD"
+    : /ريال|ر\.س|\bSAR\b/iu.test(message) ? "SAR" : null;
+  const concernsMoney = /حو[ّ]?ل|تحويل|صرف|بد[ّ]?ل|عملة|مبلغ|دولار|ريال|\b(?:USD|SAR)\b|\$/iu.test(message);
+  if (!requestedCurrency || !concernsMoney || requestedCurrency === accountCurrency) return null;
+  return { accountCurrency, requestedCurrency };
+}
+
 function sanitizeMessages(messages) {
   if (!Array.isArray(messages)) return [];
   return messages.slice(-12).flatMap((message) => {
@@ -337,6 +348,22 @@ export async function generateAssistantResult(payload, fetchImpl = fetch) {
     state: sanitizeState(payload.state),
     schema_version: AUTOMATION_SCHEMA_VERSION,
   };
+
+  const currencyMismatch = detectUnsupportedCurrencyRequest(payload);
+  if (currencyMismatch) {
+    const accountCurrencyLabel = currencyMismatch.accountCurrency === "SAR" ? "الريال السعودي" : currencyMismatch.accountCurrency;
+    const requestedCurrencyLabel = currencyMismatch.requestedCurrency === "USD" ? "الدولار الأمريكي" : currencyMismatch.requestedCurrency;
+    return {
+      action: "unsupported_request",
+      assistant_message: `فهمت أنك تريد التحويل بـ${requestedCurrencyLabel}. حسابك المتصل يعمل بـ${accountCurrencyLabel}، وAutoFlow الحالي لا يدعم صرف العملات أو تثبيت سعر صرف داخل الأتمتة. أستطيع تجهيز نفس التحويل بعملة الحساب المتصل دون تغيير بقية التفاصيل.`,
+      missing_fields: [],
+      automation: null,
+      quick_replies: [{ id: `currency-${currencyMismatch.accountCurrency.toLowerCase()}`, label: `استخدم ${accountCurrencyLabel}`, value: `استخدم عملة الحساب المتصل ${currencyMismatch.accountCurrency} وحافظ على المبلغ والموعد وبقية التفاصيل التي ذكرتها` }],
+      quick_reply_mode: "single",
+      state: sanitizeState(payload.state),
+      schema_version: AUTOMATION_SCHEMA_VERSION,
+    };
+  }
 
   const context = buildModelContext(payload);
   let openAIResponse = await callOpenAI(buildOpenAIRequest(context), fetchImpl);

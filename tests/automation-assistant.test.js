@@ -19,12 +19,13 @@ import {
   validateAssistantEnvelope,
   validateAutomation,
 } from "../src/automationContract.js";
-import { evaluateWorkflow, resolveScheduledCondition } from "../src/workflowEngine.js";
+import { evaluateWorkflow, resolveActionAmount, resolveScheduledCondition } from "../src/workflowEngine.js";
 import {
   buildModelContext,
   generateAssistantResult,
 } from "../api/automation-assistant.js";
 import { publishAiDraft } from "../api/automation-publish.js";
+import { convertPlaidAmountToSar } from "../api/plaid-snapshot.js";
 
 function validDraft(overrides = {}) {
   return {
@@ -395,4 +396,54 @@ test("36. frontend sends bounded Plaid and bill context to the backend assistant
   assert.match(source, /financial_snapshot: financialSnapshot/);
   assert.match(source, /recentTransactions\?\.slice\(0, 30\)/);
   assert.match(source, /bills: bills\?\.slice\(0, 20\)/);
+});
+
+test("37. a foreign-currency request is stopped once without asking for an exchange rate", async () => {
+  let openAiCalls = 0;
+  const payload = assistantPayload("بالدولار حولي");
+  const result = await generateAssistantResult(payload, async () => {
+    openAiCalls += 1;
+    throw new Error("OpenAI should not be called for an unsupported currency mismatch");
+  });
+  assert.equal(openAiCalls, 0);
+  assert.equal(result.action, "unsupported_request");
+  assert.equal(result.automation, null);
+  assert.match(result.assistant_message, /لا يدعم صرف العملات/);
+  assert.doesNotMatch(result.assistant_message, /سعر صرف.*حدد|كم مبلغ/);
+  assert.deepEqual(result.quick_replies.map((reply) => reply.label), ["استخدم الريال السعودي"]);
+});
+
+test("38. a transfer in the connected account currency still reaches the model", async () => {
+  const result = await generateAssistantResult(assistantPayload("حوّل 1000 ريال كل خميس الساعة 6 مساء"), mockOpenAI([{
+    action: "ask_clarification",
+    assistant_message: "إلى أي مستفيد تريد التحويل؟",
+    missing_fields: [{ path: "actions[0].beneficiaryId", question: "ما المستفيد؟" }],
+    automation: null,
+  }]));
+  assert.equal(result.action, "ask_clarification");
+});
+
+test("39. Plaid sandbox USD values are converted to SAR amounts, not relabeled", () => {
+  assert.equal(convertPlaidAmountToSar(100, "USD"), 375);
+  assert.equal(convertPlaidAmountToSar(244.33, "USD"), 916.24);
+  assert.equal(convertPlaidAmountToSar(120, "SAR"), 120);
+});
+
+test("40. a scheduled percentage is calculated from the available balance", () => {
+  const workflow = validDraft({
+    active: true,
+    conditions: [{ ...validDraft().conditions[0], type: "scheduled", schedule: { ...DEFAULT_SCHEDULE, mode: "daily", time: "03:00" } }],
+    actions: [{ ...validDraft().actions[0], amountMode: "percent", value: "10" }],
+  });
+  const run = evaluateWorkflow(workflow, {}, { balance: 2000, now: new Date("2026-07-13T00:00:00.000Z") }, []);
+  assert.ok(run);
+  assert.equal(run.percentageBase, 2000);
+  assert.equal(resolveActionAmount(run.actions[0], run), 200);
+});
+
+test("41. the assistant and editor describe the scheduled percentage base", async () => {
+  const prompt = (await import("../src/automationAssistantPrompt.js")).AUTOMATION_ASSISTANT_SYSTEM_PROMPT;
+  const source = await readFile(new URL("../src/AutoFlowStudio.jsx", import.meta.url), "utf8");
+  assert.match(prompt, /percentage of the connected account's available balance at execution time/);
+  assert.match(source, /نسبة من الرصيد المتاح وقت التنفيذ/);
 });

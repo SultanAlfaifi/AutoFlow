@@ -87,13 +87,16 @@ export function evaluateWorkflow(workflow, eventFacts, context, processedSignatu
     signature,
     facts: matched,
     primaryFact: matched[matched.length - 1],
+    percentageBase: matched.some((fact) => fact.type === "scheduled")
+      ? Number(context.balance || 0)
+      : Number(matched[matched.length - 1]?.amount || 0),
     actions: workflow.actions,
   };
 }
 
 export function resolveActionAmount(action, run) {
   if (["notify", "pause", "categorize"].includes(action.type)) return 0;
-  const baseAmount = Number(run.primaryFact?.amount || 0);
+  const baseAmount = Number(run.percentageBase ?? run.primaryFact?.amount ?? 0);
   return action.amountMode === "percent"
     ? baseAmount * (Number(action.value || 0) / 100)
     : Number(action.value || 0);
