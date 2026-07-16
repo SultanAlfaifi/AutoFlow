@@ -2,12 +2,12 @@
 
 ![Hackathon Amd](docs/hackathon-banner.png)
 
-**Automate your financial routine — on your own terms.**
+**Automate your financial routine on your own terms.**
 
 🔗 **Live demo:** [auto-flow-ecru.vercel.app](https://auto-flow-ecru.vercel.app/)
 🎥 **Video walkthrough:** [How to use the prototype](https://www.youtube.com/shorts/ONA91pHLlJ0)
 
-An interactive prototype of the Alinma Bank app featuring a new capability called **AutoFlow**: a financial automation hub that turns a plain-language idea into a clear, step-by-step automation you can review and adjust — without the assistant ever seeing your banking data, and without executing anything until you grant permission.
+An interactive prototype of the Alinma Bank app featuring a new capability called **AutoFlow**: a financial automation hub that turns a plain-language idea into a clear, step-by-step automation you can review and adjust, without the assistant ever seeing your banking data, and without executing anything until you grant permission.
 
 Built for **Hackathon Amd** (Alinma Bank × Tuwaiq Academy).
 
@@ -19,8 +19,8 @@ Bank customers repeat the same financial actions every month: moving a percentag
 
 **AutoFlow** solves this in three steps:
 
-1. **Answer one simple question at a time** — when should it start, what should happen, is there a safety limit, and who approves it.
-2. **Review a plain-language summary** — before saving, AutoFlow shows the whole automation as one clear sentence, e.g. "When your salary arrives, transfer 20% to your savings account, as long as your balance doesn't drop below 3,000 SAR, and it waits for your approval every time."
+1. **Answer one simple question at a time**  when should it start, what should happen, is there a safety limit, and who approves it.
+2. **Review a plain-language summary**, before saving, AutoFlow shows the whole automation as one clear sentence, e.g. "When your salary arrives, transfer 20% to your savings account, as long as your balance doesn't drop below 3,000 SAR, and it waits for your approval every time."
 3. **Choose your trust level** — fully automatic execution, approval required every time, or conditional approval only above a certain amount.
 
 ---
@@ -61,9 +61,9 @@ AI-generated workflows use the same object and arrays as the manual editor. Thei
 
 ##  Tech Stack
 
-- **React 19** + **Vite 8** — UI and build tooling
-- **lucide-react** — icons
-- **Plain CSS** (no styling framework) — [`src/styles.css`](./src/styles.css)
+- **React 19** + **Vite 8**, UI and build tooling
+- **lucide-react**,a icons
+- **Plain CSS** (no styling framework), [`src/styles.css`](./src/styles.css)
 - **pnpm** — package management
 - **OpenAI Responses API** — server-side structured draft generation using strict JSON Schema
 - **OpenAI Realtime API** — direct browser WebRTC audio with server-side SDP exchange and a strict draft tool
