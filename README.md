@@ -21,14 +21,14 @@ Bank customers repeat the same financial actions every month: moving a percentag
 
 1. **Answer one simple question at a time**  when should it start, what should happen, is there a safety limit, and who approves it.
 2. **Review a plain-language summary**, before saving, AutoFlow shows the whole automation as one clear sentence, e.g. "When your salary arrives, transfer 20% to your savings account, as long as your balance doesn't drop below 3,000 SAR, and it waits for your approval every time."
-3. **Choose your trust level** — fully automatic execution, approval required every time, or conditional approval only above a certain amount.
+3. **Choose your trust level**,   fully automatic execution, approval required every time, or conditional approval only above a certain amount.
 
 ---
 
 ##  Highlights
 
-- **Guided automation wizard**: a focused 5-step flow (Trigger → Action → Safety → Approval → Review) — one decision per screen instead of a crowded editor.
-- **Ready-made templates**: Salary Routine, Smart Bills, Balance Guard, and Month-End Surplus — start from a trusted template and tweak it.
+- **Guided automation wizard**: a focused 5 step flow (Trigger → Action → Safety → Approval → Review)  one decision per screen instead of a crowded editor.
+- **Ready-made templates**: Salary Routine, Smart Bills, Balance Guard, and Month-End Surplus   start from a trusted template and tweak it.
 - **Plain-language review**: every automation is summarized in one readable sentence before you save it, no jargon.
 - **Full customization**: name and color per automation, instant activate/deactivate, and a running count of executions.
 - **AI draft assistant**: turns an Arabic request into the exact workflow JSON used by the visual editor, asks only for essential missing financial values, and always opens an inactive draft for review.
