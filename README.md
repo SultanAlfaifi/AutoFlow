@@ -64,9 +64,9 @@ AI-generated workflows use the same object and arrays as the manual editor. Thei
 - **React 19** + **Vite 8**, UI and build tooling
 - **lucide-react**,a icons
 - **Plain CSS** (no styling framework), [`src/styles.css`](./src/styles.css)
-- **pnpm** — package management
-- **OpenAI Responses API** — server-side structured draft generation using strict JSON Schema
-- **OpenAI Realtime API** — direct browser WebRTC audio with server-side SDP exchange and a strict draft tool
+- **pnpm**  package management
+- **OpenAI Responses API**   server-side structured draft generation using strict JSON Schema
+- **OpenAI Realtime API**  direct browser WebRTC audio with server-side SDP exchange and a strict draft tool
 
 > Note: this remains a prototype without a database or production identity/authorization layer. Workflow config, AI metadata, and conversation state are persisted in browser `localStorage`. The Vite/Vercel API routes provide server-side OpenAI calls, validation, and guarded publication authorization.
 
