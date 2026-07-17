@@ -642,8 +642,8 @@ function AutomationAssistant({ account, financialSnapshot, bills, workflows, wor
     <section className="automation-assistant automation-assistant--drawer" role="dialog" aria-modal="true" aria-label="مساعد إنشاء الأتمتة">
     <header><span><Sparkles /></span><div><small>مساعد AutoFlow</small><h2>وش تبي تسوي؟</h2></div><div className="assistant-header-actions"><button type="button" onClick={resetConversation} title="بدء محادثة جديدة" aria-label="محادثة جديدة"><RotateCcw /></button><button type="button" onClick={onClose} title="إغلاق" aria-label="إغلاق المساعد"><X /></button></div></header>
     <div className="assistant-mode-tabs" role="tablist" aria-label="طريقة إنشاء الأتمتة">
-      <button type="button" role="tab" aria-selected={mode === "text"} className={mode === "text" ? "is-active" : ""} onClick={() => setMode("text")}>اكتب ما تريد</button>
-      <button type="button" role="tab" aria-selected={mode === "voice"} className={mode === "voice" ? "is-active" : ""} onClick={() => setMode("voice")}><Mic /> تحدث مع AutoFlow</button>
+      <button type="button" role="tab" aria-selected={mode === "text"} className={mode === "text" ? "is-active" : ""} onClick={() => setMode("text")}>كتابة</button>
+      <button type="button" role="tab" aria-selected={mode === "voice"} className={mode === "voice" ? "is-active" : ""} onClick={() => setMode("voice")}><Mic /> صوت</button>
     </div>
     {mode === "text" ? <>
     <div className="automation-assistant__messages" aria-live="polite" role="log" ref={messagesRef}>
@@ -673,6 +673,7 @@ function AutomationAssistant({ account, financialSnapshot, bills, workflows, wor
       onDraft={acceptDraft}
       onReview={openDraft}
       onReset={resetConversation}
+      onUseText={() => setMode("text")}
     />}
     </section>
   </div>;

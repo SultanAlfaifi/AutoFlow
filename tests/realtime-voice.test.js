@@ -194,6 +194,7 @@ test("the VoiceAssistant starts with one simple voice action and hides advanced 
       onDraft() {},
       onReview() {},
       onReset() {},
+      onUseText() {},
     }));
     assert.match(html, /تحدث مع مساعد AutoFlow/);
     assert.match(html, /ينشئ مسودة للمراجعة فقط/);
@@ -209,13 +210,25 @@ test("the VoiceAssistant starts with one simple voice action and hides advanced 
 test("the assistant UI keeps one shared draft while switching text and voice modes", () => {
   const source = fs.readFileSync(new URL("../src/AutoFlowStudio.jsx", import.meta.url), "utf8");
   assert.match(source, /useState\("text"\)/);
-  assert.match(source, /اكتب ما تريد/);
-  assert.match(source, /تحدث مع AutoFlow/);
+  assert.match(source, />كتابة</);
+  assert.match(source, /<Mic \/> صوت/);
   assert.match(source, /draft=\{draft\}/);
   assert.match(source, /onDraft=\{acceptDraft\}/);
+  assert.match(source, /onUseText=\{\(\) => setMode\("text"\)\}/);
   assert.match(source, /key=\{conversation\.conversation_id\}/);
   const hookSource = fs.readFileSync(new URL("../src/useRealtimeVoiceAssistant.js", import.meta.url), "utf8");
   assert.match(hookSource, /startInFlightRef\.current/);
+});
+
+test("the unavailable voice state and draft preview use simple user-facing copy", () => {
+  const source = fs.readFileSync(new URL("../src/VoiceAssistant.jsx", import.meta.url), "utf8");
+  assert.match(source, /الصوت غير متاح الآن/);
+  assert.match(source, /اكتب طلبك بدلًا من ذلك/);
+  assert.match(source, /مسودة جاهزة للمراجعة/);
+  assert.match(source, /مراجعة وتعديل/);
+  assert.doesNotMatch(source, />تبدأ عندما</);
+  assert.doesNotMatch(source, />ثم تنفذ</);
+  assert.doesNotMatch(source, />حدود الأمان</);
 });
 
 test("draft change summaries identify safety updates without exposing payloads", () => {
