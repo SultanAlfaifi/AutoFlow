@@ -101,7 +101,7 @@ button { font: inherit; touch-action: manipulation; }
 .screen-scroll::-webkit-scrollbar { display: none; }
 .screen-content {
   min-height: 100%;
-  animation: screen-enter 220ms ease both;
+  animation: screen-enter 220ms ease;
   transition: opacity 140ms ease;
 }
 .screen-scroll.is-exiting .screen-content { opacity: 0; }

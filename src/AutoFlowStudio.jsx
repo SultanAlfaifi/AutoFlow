@@ -545,7 +545,7 @@ function AutomationAssistant({ account, financialSnapshot, bills, workflows, wor
   const requestClose = useCallback(() => {
     if (isClosing) return;
     setIsClosing(true);
-    closeTimerRef.current = window.setTimeout(onClose, 190);
+    closeTimerRef.current = window.setTimeout(onClose, 300);
   }, [isClosing, onClose]);
 
   useEffect(() => { storeLocal(AI_CONVERSATION_KEY, conversation); }, [conversation]);

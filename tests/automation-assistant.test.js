@@ -640,7 +640,7 @@ test("54. phone viewports use the full screen while the assistant stays inside t
   assert.match(shortcutStyles, /\.assistant-launcher \{[\s\S]*?max-width: calc\(100% - 28px\)/);
   assert.match(shortcutStyles, /\.assistant-launcher \{[\s\S]*?bottom: 104px;/);
   assert.match(shortcutStyles, /bottom: calc\(104px \+ env\(safe-area-inset-bottom\)\)/);
-  assert.match(shortcutStyles, /width: min\(520px, calc\(100% - 16px\)\)/);
+  assert.match(shortcutStyles, /\.automation-assistant--drawer \{[\s\S]*?bottom: 0;[\s\S]*?width: 100%;[\s\S]*?border-radius: 26px 26px 0 0;/);
 });
 
 test("55. assistant conversation and automation editor remain touch-scrollable", async () => {
@@ -661,7 +661,10 @@ test("56. voice draft and app navigation use touch scrolling and smooth transiti
   const screenContentRule = styles.match(/\.screen-content \{([^}]*)\}/)?.[1] || "";
   const screenExitRule = styles.match(/\.screen-scroll\.is-exiting \.screen-content \{([^}]*)\}/)?.[1] || "";
   assert.doesNotMatch(screenContentRule, /transform/);
+  assert.doesNotMatch(screenContentRule, /animation:[^;]*\bboth\b/);
   assert.doesNotMatch(screenExitRule, /transform/);
   assert.match(shortcutStyles, /\.automation-assistant--drawer \.voice-assistant \{[^}]*flex: 1 1 auto;[^}]*min-height: 0;[^}]*overflow-y: auto;[^}]*touch-action: pan-y;/);
   assert.match(shortcutStyles, /\.assistant-drawer-layer\.is-closing \.automation-assistant--drawer/);
+  assert.match(shortcutStyles, /@keyframes assistant-drawer-in \{[\s\S]*?translateY\(100%\)[\s\S]*?translateY\(0\)/);
+  assert.match(shortcutStyles, /\.automation-assistant--drawer::before \{[\s\S]*?width: 38px;[\s\S]*?height: 5px;/);
 });
