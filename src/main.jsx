@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import AutoFlowStudio from "./AutoFlowStudio.jsx";
 import { SANDBOX_BENEFICIARIES } from "./automationContract.js";
+import { connectLeanAccount } from "./leanLink.js";
 import {
   ArrowLeftRight,
   BadgeCheck,
@@ -865,10 +866,11 @@ function App() {
   const [draftEditingId, setDraftEditingId] = useState(null);
   const [draftOpen, setDraftOpen] = useState(false);
   const [showAutoFlowHint, setShowAutoFlowHint] = useState(true);
-  const [plaidSnapshot, setPlaidSnapshot] = useState(null);
+  const [financialSnapshot, setFinancialSnapshot] = useState(null);
+  const [leanConnectBusy, setLeanConnectBusy] = useState(false);
   const [transfers, setTransfers] = useState(() => loadLocalList(TRANSFERS_KEY));
   const [bills, setBills] = useState(() => loadLocalList(BILLS_KEY));
-  const plaidLoaded = useRef(false);
+  const financialDataLoaded = useRef(false);
   const [automations, setAutomations] = useState([
     {
       id: "salary-flow",
@@ -917,21 +919,44 @@ function App() {
   const time = useMemo(() => new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(new Date()), []);
 
   const announce = (message) => setToast(message);
-  const refreshPlaid = async () => {
+  const refreshFinancialData = async () => {
     try {
-      const response = await fetch("/api/plaid-snapshot");
-      if (!response.ok) throw new Error("Plaid request failed");
-      setPlaidSnapshot(await response.json());
+      const response = await fetch("/api/financial-data");
+      if (!response.ok) throw new Error("Financial data request failed");
+      setFinancialSnapshot(await response.json());
     } catch {
       announce("تعذر تحديث البيانات التجريبية الآن");
     }
   };
 
   useEffect(() => {
-    if (plaidLoaded.current) return;
-    plaidLoaded.current = true;
-    refreshPlaid();
+    if (financialDataLoaded.current) return;
+    financialDataLoaded.current = true;
+    refreshFinancialData();
   }, []);
+
+  const connectLean = async () => {
+    if (leanConnectBusy) return;
+    setLeanConnectBusy(true);
+    try {
+      const response = await fetch("/api/lean-session", { method: "POST" });
+      const session = await response.json();
+      if (!response.ok) throw new Error(session.error || "تعذر بدء ربط الحساب");
+      const result = await connectLeanAccount(session);
+      if (result.status === "SUCCESS") {
+        announce("تم ربط الحساب. ننتظر وصول بيانات البنك.");
+        window.setTimeout(refreshFinancialData, 2500);
+      } else if (result.status === "CANCELLED" || result.status === "LINK_CLOSED_PROGRAMMATICALLY") {
+        announce("تم إلغاء ربط الحساب");
+      } else if (result.status !== "REDIRECT") {
+        throw new Error(result.message || "لم يكتمل ربط الحساب");
+      }
+    } catch (error) {
+      announce(error.message || "تعذر ربط الحساب عبر Lean");
+    } finally {
+      setLeanConnectBusy(false);
+    }
+  };
 
   const createTransfer = (transfer) => setTransfers((items) => [transfer, ...items].slice(0, 50));
   const addBill = (bill) => setBills((items) => [bill, ...items].slice(0, 50));
@@ -980,10 +1005,12 @@ function App() {
           ) : activeNav === "autoflow" ? (
             <AutoFlowStudio
               announce={announce}
-              plaidSnapshot={plaidSnapshot}
-              refreshPlaid={refreshPlaid}
-              updatePlaidSnapshot={setPlaidSnapshot}
-              beneficiaries={SANDBOX_BENEFICIARIES}
+              financialSnapshot={financialSnapshot}
+              refreshFinancialData={refreshFinancialData}
+              updateFinancialSnapshot={setFinancialSnapshot}
+              connectLean={connectLean}
+              leanConnectBusy={leanConnectBusy}
+              beneficiaries={financialSnapshot?.beneficiaries?.length ? financialSnapshot.beneficiaries : SANDBOX_BENEFICIARIES}
               transfers={transfers}
               bills={bills}
               createTransfer={createTransfer}

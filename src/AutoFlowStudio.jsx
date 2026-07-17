@@ -600,7 +600,7 @@ function AutomationAssistant({ account, financialSnapshot, bills, workflows, wor
   </div>;
 }
 
-export default function AutoFlowStudio({ announce, plaidSnapshot, refreshPlaid, updatePlaidSnapshot, beneficiaries, transfers, bills, createTransfer, addBill, payBills }) {
+export default function AutoFlowStudio({ announce, financialSnapshot, refreshFinancialData, updateFinancialSnapshot, connectLean, leanConnectBusy, beneficiaries, transfers, bills, createTransfer, addBill, payBills }) {
   const [workflows, setWorkflows] = useState(() => loadList(WORKFLOWS_KEY, []).map(normalizeWorkflowShape));
   const [workflowMetadata, setWorkflowMetadata] = useState(() => loadObject(AI_METADATA_KEY, {}));
   const [history, setHistory] = useState(() => loadList(HISTORY_KEY, []));
@@ -622,8 +622,9 @@ export default function AutoFlowStudio({ announce, plaidSnapshot, refreshPlaid, 
   const [publishTarget, setPublishTarget] = useState(null);
   const [publishBusy, setPublishBusy] = useState(false);
   const [publishError, setPublishError] = useState("");
-  const currency = plaidSnapshot?.account?.currency || "USD";
-  const rawBalance = Number(plaidSnapshot?.account?.availableBalance ?? plaidSnapshot?.account?.currentBalance ?? 0);
+  const currency = financialSnapshot?.account?.currency || "SAR";
+  const rawBalance = Number(financialSnapshot?.account?.availableBalance ?? financialSnapshot?.account?.currentBalance ?? 0);
+  const provider = financialSnapshot?.provider || { active: "plaid", status: financialSnapshot?.connected ? "connected" : "demo" };
   const virtualOutflow = transfers.filter((item) => item.status === "completed" && !item.plaidRecorded).reduce((sum, item) => sum + item.amount, 0);
   const balance = Math.max(0, rawBalance - virtualOutflow);
   const pendingApproval = approvalQueue[0] || null;
@@ -641,7 +642,7 @@ export default function AutoFlowStudio({ announce, plaidSnapshot, refreshPlaid, 
     const response = await fetch("/api/plaid-snapshot", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     if (!response.ok) throw new Error("Sandbox event failed");
     const snapshot = await response.json();
-    updatePlaidSnapshot(snapshot);
+    if (provider.active === "plaid") updateFinancialSnapshot((current) => ({ ...snapshot, provider: current?.provider || provider }));
     return snapshot;
   };
 
@@ -650,7 +651,7 @@ export default function AutoFlowStudio({ announce, plaidSnapshot, refreshPlaid, 
       await postSandbox(payload);
       return true;
     } catch {
-      addHistory("warning", "اكتمل محليًا دون تسجيل Plaid", "تعذر تسجيل المعاملة الثانوية في Sandbox، ولم يتوقف الاختصار");
+      addHistory("warning", "اكتمل محليًا فقط", "تعذر تسجيل المعاملة داخل بيئة الاختبار، ولم تتوقف الأتمتة");
       return false;
     }
   };
@@ -726,14 +727,14 @@ export default function AutoFlowStudio({ announce, plaidSnapshot, refreshPlaid, 
 
   const fireEvent = async (eventMeta) => {
     setBusyEvent(eventMeta.id);
-    const bill = eventMeta.id === "bill-due" ? { id: `bill-${Date.now()}`, name: "فاتورة الكهرباء", amount: eventMeta.amount, currency, dueDate: today, status: "due", source: "Plaid Sandbox" } : null;
+    const bill = eventMeta.id === "bill-due" ? { id: `bill-${Date.now()}`, name: "فاتورة الكهرباء", amount: eventMeta.amount, currency, dueDate: today, status: "due", source: "بيئة AutoFlow التجريبية" } : null;
     const event = { id: `event-${eventMeta.id}-${Date.now()}`, type: eventMeta.id, amount: eventMeta.amount, merchant: eventMeta.description, label: eventMeta.label, bill, createdAt: new Date().toISOString() };
     try {
       if (!eventMeta.localOnly) {
         try {
           await postSandbox({ action: eventMeta.id === "salary" ? "inject-salary" : "inject-event", direction: eventMeta.direction, amount: eventMeta.amount, currency, description: `${eventMeta.description} ${Date.now()}` });
         } catch {
-          addHistory("warning", "الحدث يعمل محليًا", `${eventMeta.label} لم يُسجل في Plaid هذه المرة`);
+          addHistory("warning", "الحدث يعمل محليًا", `${eventMeta.label} لم يُسجل في مزود البيانات هذه المرة`);
         }
       }
       if (bill) addBill(bill);
@@ -744,7 +745,7 @@ export default function AutoFlowStudio({ announce, plaidSnapshot, refreshPlaid, 
       setLastEvent({ label: eventMeta.label, matchedCount });
     } catch {
       addHistory("blocked", "تعذر تشغيل الحدث", eventMeta.label);
-      announce("تعذر الاتصال بـ Plaid Sandbox");
+      announce("تعذر الاتصال ببيئة البيانات التجريبية");
     } finally {
       setBusyEvent(null);
     }
@@ -871,6 +872,25 @@ export default function AutoFlowStudio({ announce, plaidSnapshot, refreshPlaid, 
 
   return <div className="shortcut-studio">
     <header className="shortcut-studio__header"><div><span className="shortcut-logo"><Workflow /></span><div><h1>AutoFlow</h1><span><i /> جاهز للعمل</span></div></div><button type="button" onClick={newWorkflow}><Settings2 /> إنشاء يدوي</button></header>
+    <section className={`financial-provider-card financial-provider-card--${provider.status}`} aria-label="مصدر البيانات المالية">
+      <span><Landmark /></span>
+      <div>
+        <small>مصدر البيانات</small>
+        <strong>{provider.active === "lean" ? "Lean السعودية" : "بيانات تجريبية"}</strong>
+        <p>{provider.status === "connected" && provider.active === "lean"
+          ? "حسابك متصل بموافقتك عبر الخدمات المصرفية المفتوحة."
+          : provider.status === "connection_required"
+            ? "اربط حسابك البنكي لقراءة الرصيد والمعاملات بموافقتك."
+            : provider.status === "syncing"
+              ? "تم الربط، وLean يجهز بيانات البنك. حدّث بعد اكتمال المزامنة."
+            : provider.status === "fallback"
+              ? "Lean غير متاح الآن؛ استمرت البيانات التجريبية دون تعطيل AutoFlow."
+              : "AutoFlow يعمل بأمان على بيانات العرض الحالية."}</p>
+      </div>
+      {provider.status === "syncing"
+        ? <button type="button" onClick={refreshFinancialData}>تحديث</button>
+        : ["connection_required", "fallback"].includes(provider.status) && <button type="button" onClick={connectLean} disabled={leanConnectBusy}>{leanConnectBusy ? "جارٍ الفتح…" : provider.status === "fallback" ? "إعادة الربط" : "ربط الحساب"}</button>}
+    </section>
 
     {!workflows.length ? <section className="automation-empty-state">
       <span className="automation-empty-state__icon"><Sparkles /></span>
@@ -896,7 +916,7 @@ export default function AutoFlowStudio({ announce, plaidSnapshot, refreshPlaid, 
       <div className="event-console__heading">
         <span className="event-console__step">1</span>
         <div><small>جرّب الأتمتة</small><h2>ما الذي حدث في الحساب؟</h2><p>اختر حدثاً واحداً. سيبحث AutoFlow عن الأتمتات المرتبطة به وينفذ خطواتها بالترتيب.</p></div>
-        <button type="button" onClick={refreshPlaid} aria-label="تحديث بيانات الحساب التجريبي" title="جلب أحدث بيانات الحساب التجريبي"><Repeat2 /></button>
+        <button type="button" onClick={refreshFinancialData} aria-label="تحديث بيانات الحساب" title="جلب أحدث بيانات الحساب"><Repeat2 /></button>
       </div>
 
       <div className="event-console__notice"><ShieldCheck /><span><strong>هذه تجربة آمنة</strong><small>الأحداث والأموال هنا افتراضية ولا تحرك أموالاً حقيقية.</small></span></div>
@@ -957,9 +977,9 @@ export default function AutoFlowStudio({ announce, plaidSnapshot, refreshPlaid, 
       <button className="assistant-launcher__voice" type="button" onClick={() => openAssistant("voice")} aria-label="التحدث صوتيًا مع AutoFlow"><Mic /></button>
       <button className="assistant-launcher__chat" type="button" onClick={() => openAssistant("text")} aria-label="فتح مساعد AutoFlow"><Sparkles /><span>اسأل AutoFlow</span></button>
     </div>
-    <AutomationAssistant open={assistantOpen} initialMode={assistantMode} onClose={() => setAssistantOpen(false)} account={plaidSnapshot?.account} financialSnapshot={plaidSnapshot} bills={bills} workflows={workflows} workflowMetadata={workflowMetadata} onDraft={saveAiDraft} openDraft={openDraftById} />
+    <AutomationAssistant open={assistantOpen} initialMode={assistantMode} onClose={() => setAssistantOpen(false)} account={financialSnapshot?.account} financialSnapshot={financialSnapshot} bills={bills} workflows={workflows} workflowMetadata={workflowMetadata} onDraft={saveAiDraft} openDraft={openDraftById} />
     {advancedTarget && <AdvancedWorkflowSettings workflow={advancedTarget} close={() => setAdvancedTarget(null)} save={saveAdvancedSettings} />}
-    {editor && <ShortcutEditor workflow={editor} beneficiaries={beneficiaries} account={plaidSnapshot?.account} metadata={workflowMetadata[editor.id]} close={() => setEditor(null)} save={saveWorkflow} requestPublish={requestPublishFromEditor} />}
+    {editor && <ShortcutEditor workflow={editor} beneficiaries={beneficiaries} account={financialSnapshot?.account} metadata={workflowMetadata[editor.id]} close={() => setEditor(null)} save={saveWorkflow} requestPublish={requestPublishFromEditor} />}
     {deleteTarget && <div className="shortcut-delete-layer"><section role="dialog" aria-modal="true" aria-labelledby="delete-automation-title"><span className="shortcut-delete-layer__icon"><AlertTriangle /></span><small>حذف نهائي</small><h2 id="delete-automation-title">حذف «{deleteTarget.name}»؟</h2><p>سيتم حذف الأتمتة وكل إعداداتها من هذا الجهاز. لا يمكن التراجع عن هذا الإجراء.</p><div><button type="button" onClick={() => setDeleteTarget(null)}>إلغاء</button><button type="button" onClick={deleteWorkflow}><Trash2 /> حذف الأتمتة نهائيًا</button></div></section></div>}
     {pendingApproval && <div className="shortcut-approval-layer"><section role="dialog" aria-modal="true" aria-label="طلب موافقة على إجراء"><span><ShieldCheck /></span><small>طلب موافقة</small><h2>{pendingApproval.run.workflowTitle}</h2><p>{actionLabel(pendingApproval.action)}{pendingApproval.amount ? ` بقيمة ${formatMoney(pendingApproval.amount, currency)}` : ""}</p><div><button type="button" onClick={reject}>رفض</button><button type="button" onClick={approve}>موافقة ومتابعة</button></div></section></div>}
     {publishTarget && <div className="ai-publish-layer"><section role="dialog" aria-modal="true" aria-labelledby="ai-publish-title"><span className="ai-publish-layer__icon"><AlertTriangle /></span><small>تأكيد النشر اليدوي</small><h2 id="ai-publish-title">نشر «{publishTarget.name}»؟</h2><p>هذه الأتمتة تم إنشاؤها باستخدام الذكاء الاصطناعي، وقد تحتوي على أخطاء أو تنفذ إجراءات غير متوقعة.</p><p>يرجى مراجعة المحفزات والشروط والحسابات والمستفيدين والمبالغ وجميع خطوات الأتمتة قبل النشر.</p><p>هل أنت متأكد من رغبتك في نشرها؟</p>{publishError && <div className="assistant-error" role="alert"><AlertTriangle /><span>{publishError}</span></div>}<div><button type="button" onClick={() => { setPublishTarget(null); setPublishError(""); }} disabled={publishBusy}>العودة للمراجعة</button><button type="button" onClick={publishAiWorkflow} disabled={publishBusy}>{publishBusy ? "جارٍ التحقق…" : "نعم، راجعت الأتمتة وأرغب في نشرها"}</button></div></section></div>}

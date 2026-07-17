@@ -95,6 +95,38 @@ pnpm preview
 pnpm test
 ```
 
+### Saudi Open Banking data with Lean
+
+AutoFlow now reads financial data through `/api/financial-data`, which selects a provider without changing the workflow engine:
+
+- `FINANCIAL_DATA_PROVIDER=auto` uses Lean when its complete server configuration exists, otherwise it keeps the existing Plaid/demo path.
+- `FINANCIAL_DATA_PROVIDER=lean` requests Lean first and falls back to Plaid/demo if Lean is unavailable.
+- `FINANCIAL_DATA_PROVIDER=plaid` preserves the original Plaid integration.
+
+Create a Saudi sandbox application at [dev.sa.leantech.me](https://dev.sa.leantech.me), then copy the Application ID, Client Secret, and Application Token from the Lean integration dashboard:
+
+```env
+FINANCIAL_DATA_PROVIDER=lean
+LEAN_ENV=sandbox
+LEAN_APPLICATION_ID=
+LEAN_CLIENT_SECRET=
+LEAN_APP_TOKEN=
+LEAN_APP_USER_ID=autoflow-sandbox-user
+```
+
+Restart the server after changing environment variables. AutoFlow will then show **ربط الحساب**. The button requests a customer-scoped JWT from the backend and opens Lean LinkSDK in Arabic. The Client Secret never enters the browser; only the public Application Token, Lean customer ID, and short-lived customer access token are returned to the SDK.
+
+The current prototype retrieves the latest active entity, accounts, balances, transactions, and beneficiaries, then normalizes them into the same snapshot contract previously supplied by Plaid. Plaid's sandbox event endpoint remains isolated for the visible **تجربة الأتمتات** tools; those buttons never create a real Lean transaction.
+
+For a production deployment, store each authenticated user's Lean `customer_id` and `entity_id` in a server database instead of the optional environment variables below:
+
+```env
+LEAN_CUSTOMER_ID=
+LEAN_ENTITY_ID=
+```
+
+Production also requires enabling the Lean application, switching to `LEAN_ENV=production`, registering verified webhook endpoints, processing `entity.data.refresh.updated` only after `FINISHED`, enforcing webhook signature/idempotency checks, and completing the applicable SAMA/Lean commercial and compliance onboarding. Do not put real customer identifiers or financial data in the Lean sandbox.
+
 ### Voice assistant configuration and local test
 
 ```env
@@ -166,6 +198,9 @@ AutoFlow/
 │   ├── automation-assistant.js        Responses API + Structured Outputs endpoint
 │   ├── automation-draft.js            Shared trusted AI tool validation endpoint
 │   ├── automation-publish.js          Editor-only manual publication guard
+│   ├── financial-data.js               Provider selector with safe Lean → Plaid fallback
+│   ├── lean-client.js                  Lean KSA OAuth, customer, entity, and data adapter
+│   ├── lean-session.js                 Short-lived LinkSDK connection session
 │   ├── openai/realtime/session.js      Secure unified WebRTC SDP exchange
 │   └── plaid-snapshot.js              Plaid sandbox endpoint
 ├── server/                             Shared draft engine and server-only Realtime prompt

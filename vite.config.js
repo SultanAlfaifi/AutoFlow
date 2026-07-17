@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
-  Object.assign(process.env, Object.fromEntries(Object.entries(env).filter(([key]) => key.startsWith("PLAID_") || key.startsWith("OPENAI_"))));
+  Object.assign(process.env, Object.fromEntries(Object.entries(env).filter(([key]) => key.startsWith("PLAID_") || key.startsWith("LEAN_") || key.startsWith("OPENAI_") || key === "FINANCIAL_DATA_PROVIDER")));
 
   return {
     plugins: [
@@ -11,6 +11,14 @@ export default defineConfig(({ mode }) => {
       {
         name: "autoflow-local-api",
         configureServer(server) {
+          server.middlewares.use("/api/financial-data", async (request, response) => {
+            const { default: handler } = await import("./api/financial-data.js");
+            await handler(request, response);
+          });
+          server.middlewares.use("/api/lean-session", async (request, response) => {
+            const { default: handler } = await import("./api/lean-session.js");
+            await handler(request, response);
+          });
           server.middlewares.use("/api/plaid-snapshot", async (request, response) => {
             const { default: handler } = await import("./api/plaid-snapshot.js");
             await handler(request, response);

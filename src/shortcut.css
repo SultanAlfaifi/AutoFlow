@@ -9,6 +9,20 @@
 .shortcut-logo svg { width: 22px; }
 .shortcut-studio__header > button { display: flex; align-items: center; gap: 6px; border: 0; border-radius: 8px; padding: 10px 12px; color: #00384b; background: #ff897c; font-weight: 800; white-space: nowrap; }
 .shortcut-studio__header > button svg { width: 17px; }
+.financial-provider-card { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 10px; margin: -7px 0 13px; padding: 10px; border: 1px solid #d9e2e3; border-radius: 10px; color: #174b57; background: #f3f8f8; }
+.financial-provider-card > span { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 9px; color: #007087; background: #dff0f2; }
+.financial-provider-card > span svg { width: 19px; }
+.financial-provider-card > div { min-width: 0; }
+.financial-provider-card small, .financial-provider-card strong { display: block; }
+.financial-provider-card small { color: #71858a; font-size: 8px; font-weight: 800; }
+.financial-provider-card strong { margin-top: 1px; color: #073e4d; font-size: 11px; }
+.financial-provider-card p { margin: 2px 0 0; color: #687d83; font-size: 8px; line-height: 1.5; }
+.financial-provider-card > button { min-height: 34px; padding: 0 10px; border: 0; border-radius: 8px; color: #073b4b; background: #ff897c; font-size: 9px; font-weight: 900; white-space: nowrap; }
+.financial-provider-card > button:disabled { opacity: .55; }
+.financial-provider-card--connected { border-color: #b9dfce; background: #f0faf5; }
+.financial-provider-card--connected > span { color: #16835b; background: #dff5e9; }
+.financial-provider-card--syncing { border-color: #bddce2; background: #eff8fa; }
+.financial-provider-card--fallback { border-color: #ebd5aa; background: #fff8e9; }
 
 .automation-empty-state { min-height: 430px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 28px 20px; border: 1px solid #ddd6d0; border-radius: 12px; text-align: center; background: white; animation: shortcut-fade-up .35s ease both; }
 .automation-empty-state__icon { width: 60px; height: 60px; display: grid; place-items: center; margin-bottom: 13px; border-radius: 16px; color: #b7433b; background: #ffe5e1; }
@@ -775,6 +789,8 @@
 [data-theme="dark"] .automation-empty-state > .automation-empty-state__manual { color: #c4d3d6; background: transparent; }
 [data-theme="dark"] .voice-simple-start { border-color: #31545e; background: #073543; }
 [data-theme="dark"] .voice-simple-start > h3 { color: #eaf3f4; }
+[data-theme="dark"] .financial-provider-card { border-color: #31545e; color: #eaf3f4; background: #073543; }
+[data-theme="dark"] .financial-provider-card strong { color: #eaf3f4; }
 
 @media (max-width: 430px) {
   .assistant-launcher { right: 12px; bottom: 98px; }

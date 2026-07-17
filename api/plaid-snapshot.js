@@ -19,7 +19,7 @@ function normalizeTransactionToSar(transaction) {
   return { ...transaction, amount: convertPlaidAmountToSar(transaction.amount, transaction.currency), currency: "SAR" };
 }
 
-const demoSnapshot = {
+export const demoSnapshot = {
   source: "demo",
   connected: false,
   syncedAt: new Date().toISOString(),
