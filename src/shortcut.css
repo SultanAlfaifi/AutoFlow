@@ -526,7 +526,7 @@
 .voice-transcript-card > header strong, .voice-transcript-card > header small { display: block; }
 .voice-transcript-card > header strong { font-size: 11px; }
 .voice-transcript-card > header small { margin-top: 1px; color: #71858a; font-size: 8px; }
-.voice-transcript { min-height: 118px; max-height: 230px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; padding: 11px; background: #fbfcfc; }
+.voice-transcript { min-height: 118px; max-height: 230px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: 11px; background: #fbfcfc; }
 .voice-transcript__empty { min-height: 96px; display: grid; place-items: center; align-content: center; gap: 4px; color: #71858a; text-align: center; }
 .voice-transcript__empty svg { width: 22px; color: #8fa4a9; }
 .voice-transcript__empty strong { color: #45636b; font-size: 10px; }
@@ -711,6 +711,8 @@
   inset: 0;
   pointer-events: none;
 }
+.assistant-drawer-layer.is-closing .assistant-drawer-backdrop { animation: assistant-backdrop-out .19s ease both; }
+.assistant-drawer-layer.is-closing .automation-assistant--drawer { animation: assistant-drawer-out .19s ease both; }
 .assistant-drawer-backdrop {
   position: absolute;
   inset: 0;
@@ -758,7 +760,7 @@
   gap: 5px;
 }
 .automation-assistant--drawer .assistant-mode-tabs svg { width: 14px; }
-.automation-assistant--drawer .voice-assistant { overflow-y: auto; }
+.automation-assistant--drawer .voice-assistant { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
 
 .voice-assistant--simple { gap: 10px; }
 .voice-simple-start {
@@ -823,6 +825,14 @@
 @keyframes assistant-drawer-in {
   from { opacity: 0; transform: translateY(18px) scale(.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes assistant-drawer-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(22px) scale(.985); }
+}
+@keyframes assistant-backdrop-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 [data-theme="dark"] .autoflow-simple-summary,

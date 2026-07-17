@@ -648,3 +648,14 @@ test("55. assistant conversation and automation editor remain touch-scrollable",
   assert.match(shortcutStyles, /\.assistant-text-scroll \{[^}]*flex: 1 1 auto;[^}]*min-height: 0;[^}]*overflow-y: auto;[^}]*touch-action: pan-y;/);
   assert.match(shortcutStyles, /\.shortcut-editor__scroll \{[^}]*flex: 1 1 auto;[^}]*min-height: 0;[^}]*overflow-y: auto;[^}]*touch-action: pan-y;/);
 });
+
+test("56. voice draft and app navigation use touch scrolling and smooth transitions", async () => {
+  const mainSource = await readFile(new URL("../src/main.jsx", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
+  const shortcutStyles = await readFile(new URL("../src/shortcut.css", import.meta.url), "utf8");
+  assert.match(mainSource, /className="screen-content" key=\{activeNav\}/);
+  assert.match(styles, /\.screen-scroll\.is-exiting \.screen-content/);
+  assert.match(styles, /@keyframes screen-enter/);
+  assert.match(shortcutStyles, /\.automation-assistant--drawer \.voice-assistant \{[^}]*flex: 1 1 auto;[^}]*min-height: 0;[^}]*overflow-y: auto;[^}]*touch-action: pan-y;/);
+  assert.match(shortcutStyles, /\.assistant-drawer-layer\.is-closing \.automation-assistant--drawer/);
+});

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowDown,
@@ -538,21 +538,32 @@ function AutomationAssistant({ account, financialSnapshot, bills, workflows, wor
   const [error, setError] = useState("");
   const [selectedReplies, setSelectedReplies] = useState([]);
   const [mode, setMode] = useState("text");
+  const [isClosing, setIsClosing] = useState(false);
   const messagesRef = useRef(null);
   const inputRef = useRef(null);
+  const closeTimerRef = useRef(null);
+  const requestClose = useCallback(() => {
+    if (isClosing) return;
+    setIsClosing(true);
+    closeTimerRef.current = window.setTimeout(onClose, 190);
+  }, [isClosing, onClose]);
 
   useEffect(() => { storeLocal(AI_CONVERSATION_KEY, conversation); }, [conversation]);
   useEffect(() => {
-    if (open) setMode(initialMode || "text");
+    if (open) {
+      setMode(initialMode || "text");
+      setIsClosing(false);
+    }
   }, [open, initialMode]);
+  useEffect(() => () => window.clearTimeout(closeTimerRef.current), []);
   useEffect(() => {
     if (!open) return undefined;
     const onKeyDown = (event) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") requestClose();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose]);
+  }, [open, requestClose]);
   useEffect(() => {
     if (!open || mode !== "text") return;
     inputRef.current?.focus();
@@ -641,10 +652,10 @@ function AutomationAssistant({ account, financialSnapshot, bills, workflows, wor
 
   const draft = conversation.state?.draft;
   if (!open) return null;
-  return <div className="assistant-drawer-layer" role="presentation">
-    <button className="assistant-drawer-backdrop" type="button" onClick={onClose} aria-label="إغلاق مساعد AutoFlow" />
+  return <div className={`assistant-drawer-layer ${isClosing ? "is-closing" : ""}`} role="presentation">
+    <button className="assistant-drawer-backdrop" type="button" onClick={requestClose} aria-label="إغلاق مساعد AutoFlow" />
     <section className="automation-assistant automation-assistant--drawer" role="dialog" aria-modal="true" aria-label="مساعد إنشاء الأتمتة">
-    <header><span><Sparkles /></span><div><small>مساعد AutoFlow</small><h2>وش تبي تسوي؟</h2></div><div className="assistant-header-actions"><button type="button" onClick={resetConversation} title="بدء محادثة جديدة" aria-label="محادثة جديدة"><RotateCcw /></button><button type="button" onClick={onClose} title="إغلاق" aria-label="إغلاق المساعد"><X /></button></div></header>
+    <header><span><Sparkles /></span><div><small>مساعد AutoFlow</small><h2>وش تبي تسوي؟</h2></div><div className="assistant-header-actions"><button type="button" onClick={resetConversation} title="بدء محادثة جديدة" aria-label="محادثة جديدة"><RotateCcw /></button><button type="button" onClick={requestClose} title="إغلاق" aria-label="إغلاق المساعد"><X /></button></div></header>
     <div className="assistant-mode-tabs" role="tablist" aria-label="طريقة إنشاء الأتمتة">
       <button type="button" role="tab" aria-selected={mode === "text"} className={mode === "text" ? "is-active" : ""} onClick={() => setMode("text")}>كتابة</button>
       <button type="button" role="tab" aria-selected={mode === "voice"} className={mode === "voice" ? "is-active" : ""} onClick={() => setMode("voice")}><Mic /> صوت</button>

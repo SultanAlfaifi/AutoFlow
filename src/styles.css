@@ -99,6 +99,17 @@ button { font: inherit; touch-action: manipulation; }
   scrollbar-width: none;
 }
 .screen-scroll::-webkit-scrollbar { display: none; }
+.screen-content {
+  min-height: 100%;
+  transform-origin: center top;
+  animation: screen-enter 260ms cubic-bezier(.2, .8, .2, 1) both;
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+.screen-scroll.is-exiting .screen-content { opacity: 0; transform: translateY(7px) scale(.995); }
+@keyframes screen-enter {
+  from { opacity: 0; transform: translateY(-7px) scale(.995); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 
 .app-header { display: flex; align-items: center; justify-content: space-between; min-height: 54px; }
 .profile { display: flex; align-items: center; gap: 11px; }

@@ -917,6 +917,7 @@ function App() {
   const [balanceVisible, setBalanceVisible] = useState(false);
   const [promoIndex, setPromoIndex] = useState(0);
   const [activeNav, setActiveNav] = useState("home");
+  const [navExiting, setNavExiting] = useState(false);
   const [toast, setToast] = useState("");
   const [time, setTime] = useState(currentClock);
   const [showAutoFlowHint, setShowAutoFlowHint] = useState(true);
@@ -925,6 +926,7 @@ function App() {
   const [transfers, setTransfers] = useState(() => loadLocalList(TRANSFERS_KEY));
   const [bills, setBills] = useState(loadSandboxBills);
   const financialDataLoaded = useRef(false);
+  const navTimerRef = useRef(null);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -960,14 +962,24 @@ function App() {
     const scrollArea = document.querySelector(".screen-scroll");
     if (scrollArea) scrollArea.scrollTop = 0;
   }, [activeNav]);
+  useEffect(() => () => window.clearTimeout(navTimerRef.current), []);
 
   const promo = promos[promoIndex];
   const homeAccount = financialSnapshot?.account;
   const beneficiaries = mergeBeneficiaries(financialSnapshot?.beneficiaries);
 
   const announce = (message) => setToast(message);
+  const navigateTo = (target) => {
+    if (target === activeNav || navExiting) return;
+    setNavExiting(true);
+    window.clearTimeout(navTimerRef.current);
+    navTimerRef.current = window.setTimeout(() => {
+      setActiveNav(target);
+      setNavExiting(false);
+    }, 140);
+  };
   const openAutoFlow = () => {
-    setActiveNav("autoflow");
+    navigateTo("autoflow");
     setShowAutoFlowHint(false);
     announce("تم فتح مركز AutoFlow");
   };
@@ -1030,7 +1042,8 @@ function App() {
           </div>
         </div>
 
-        <div className={`screen-scroll ${activeNav === "transfers" ? "screen-scroll--transfers" : ""} ${activeNav === "autoflow" ? "screen-scroll--autoflow" : ""} ${["payments", "store", "services"].includes(activeNav) ? "screen-scroll--bank-section" : ""}`}>
+        <div className={`screen-scroll ${navExiting ? "is-exiting" : ""} ${activeNav === "transfers" ? "screen-scroll--transfers" : ""} ${activeNav === "autoflow" ? "screen-scroll--autoflow" : ""} ${["payments", "store", "services"].includes(activeNav) ? "screen-scroll--bank-section" : ""}`}>
+          <div className="screen-content" key={activeNav}>
           {activeNav === "transfers" ? (
             <TransfersScreen announce={announce} openAutoFlow={openAutoFlow} beneficiaries={beneficiaries} transfers={transfers} />
           ) : activeNav === "autoflow" ? (
@@ -1106,7 +1119,7 @@ function App() {
 
           <section className="quick-actions" aria-label="الإجراءات السريعة">
             {quickActions.map(({ label, icon: Icon, target }) => (
-              <button key={label} onClick={() => { setActiveNav(target); announce(label.replace("\n", " ")); }}>
+              <button key={label} onClick={() => { navigateTo(target); announce(label.replace("\n", " ")); }}>
                 <span><Icon /></span>
                 {label.split("\n").map((line) => <React.Fragment key={line}>{line}<br /></React.Fragment>)}
               </button>
@@ -1124,12 +1137,13 @@ function App() {
           </button>
           </>
           )}
+          </div>
         </div>
 
         <nav className="bottom-nav" aria-label="التنقل الرئيسي">
           {navItems.map(({ id, label, icon: Icon, featured }) => (
             <button key={id} aria-current={activeNav === id ? "page" : undefined} className={`${activeNav === id ? "active" : ""} ${featured ? "featured" : ""}`} onClick={() => {
-              setActiveNav(id);
+              navigateTo(id);
               if (id === "autoflow") setShowAutoFlowHint(false);
             }}>
               {featured && showAutoFlowHint && activeNav === "home" && <span className="autoflow-coachmark" aria-hidden="true">جديد · جرّب AutoFlow</span>}
