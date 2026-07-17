@@ -8,6 +8,7 @@ export default function VoiceAssistant({
   draft,
   metadata,
   account,
+  beneficiaries,
   conditionLabels,
   actionLabels,
   safetyLabels,
@@ -15,7 +16,7 @@ export default function VoiceAssistant({
   onReview,
   onUseText = () => {},
 }) {
-  const voice = useRealtimeVoiceAssistant({ conversationId, draft, metadata, account, onDraft });
+  const voice = useRealtimeVoiceAssistant({ conversationId, draft, metadata, account, beneficiaries, onDraft });
   const statusLabel = VOICE_STATUS_LABELS[voice.status] || VOICE_STATUS_LABELS.idle;
   const canStart = !voice.active && voice.availability.enabled && !voice.availability.loading;
   const voiceUnavailable = !voice.availability.loading && !voice.availability.enabled;

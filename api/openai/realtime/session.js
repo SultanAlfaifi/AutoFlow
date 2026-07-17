@@ -53,7 +53,7 @@ export function buildRealtimeSession(payload = {}) {
     type: "realtime",
     model: process.env.OPENAI_REALTIME_MODEL || "gpt-realtime-2.1",
     output_modalities: ["audio"],
-    instructions: buildRealtimeAssistantInstructions({ currentDraft: payload.current_draft, account: payload.account }),
+    instructions: buildRealtimeAssistantInstructions({ currentDraft: payload.current_draft, account: payload.account, beneficiaries: payload.beneficiaries }),
     max_output_tokens: 700,
     audio: {
       input: {
@@ -66,7 +66,7 @@ export function buildRealtimeSession(payload = {}) {
         turn_detection: {
           type: "semantic_vad",
           eagerness: "low",
-          create_response: true,
+          create_response: false,
           interrupt_response: true,
         },
       },

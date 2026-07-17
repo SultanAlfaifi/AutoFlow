@@ -5,6 +5,18 @@ import {
 
 const MAX_BODY_BYTES = 64 * 1024;
 
+function allowedBeneficiaries(payload) {
+  const supplied = Array.isArray(payload?.beneficiaries) ? payload.beneficiaries : [];
+  const merged = [...SANDBOX_BENEFICIARIES, ...supplied.flatMap((beneficiary) => {
+    if (!beneficiary || typeof beneficiary !== "object") return [];
+    const id = String(beneficiary.id || "").trim().slice(0, 100);
+    const name = String(beneficiary.name || "").trim().slice(0, 100);
+    const kind = beneficiary.kind === "internal" ? "internal" : "beneficiary";
+    return id && name && name !== "مستفيد بنكي" ? [{ id, name, kind }] : [];
+  })];
+  return [...new Map(merged.map((beneficiary) => [beneficiary.id, beneficiary])).values()].slice(0, 50);
+}
+
 async function readRequestBody(request) {
   if (request.body && typeof request.body === "object") return request.body;
   let raw = "";
@@ -30,7 +42,7 @@ export function publishAiDraft(payload, now = new Date().toISOString()) {
     payload.automation,
     payload.metadata,
     payload.manual_review_confirmed,
-    { beneficiaries: SANDBOX_BENEFICIARIES, now },
+    { beneficiaries: allowedBeneficiaries(payload), now },
   );
   if (!result.ok) return { ok: false, statusCode: 422, error: "لم تجتز المسودة التحقق المطلوب قبل النشر", issues: result.issues };
   return { ok: true, statusCode: 200, automation: result.automation, metadata: result.metadata };

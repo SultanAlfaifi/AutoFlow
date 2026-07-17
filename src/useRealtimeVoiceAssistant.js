@@ -26,6 +26,7 @@ export function classifyVoiceError(error) {
 export function cleanupRealtimeResources(resources = {}) {
   if (resources.connectionTimer) clearTimeout(resources.connectionTimer);
   if (resources.disconnectTimer) clearTimeout(resources.disconnectTimer);
+  if (resources.responseTimer) clearTimeout(resources.responseTimer);
   resources.abortController?.abort?.();
   if (resources.channel) {
     resources.channel.onopen = null;
@@ -48,7 +49,7 @@ export function cleanupRealtimeResources(resources = {}) {
   }
 }
 
-export function useRealtimeVoiceAssistant({ conversationId, draft, metadata, account, onDraft }) {
+export function useRealtimeVoiceAssistant({ conversationId, draft, metadata, account, beneficiaries = [], onDraft }) {
   const [status, setStatus] = useState("idle");
   const [transcript, setTranscript] = useState([]);
   const [error, setError] = useState("");
@@ -119,6 +120,7 @@ export function useRealtimeVoiceAssistant({ conversationId, draft, metadata, acc
           draft: args.draft,
           current_draft: draftRef.current,
           current_metadata: metadataRef.current,
+          beneficiaries: beneficiaries.map(({ id, name, kind }) => ({ id, name, kind })),
         }),
       });
       const result = await response.json().catch(() => ({}));
@@ -145,7 +147,7 @@ export function useRealtimeVoiceAssistant({ conversationId, draft, metadata, acc
       });
       sendEvent(channel, { type: "response.create" });
     }
-  }, [conversationId]);
+  }, [beneficiaries, conversationId]);
 
   const handleServerEvent = useCallback((event, channel, generation) => {
     if (generation !== generationRef.current) return;
@@ -153,9 +155,26 @@ export function useRealtimeVoiceAssistant({ conversationId, draft, metadata, acc
     const nextStatus = statusFromRealtimeEvent(event, statusRef.current, mutedRef.current);
     if (nextStatus !== statusRef.current) setStatus(nextStatus);
 
-    if (event.type === "input_audio_buffer.speech_started" && ["assistant_speaking", "thinking"].includes(statusRef.current)) {
-      sendEvent(channel, { type: "response.cancel" });
-      sendEvent(channel, { type: "output_audio_buffer.clear" });
+    if (event.type === "input_audio_buffer.speech_started") {
+      const resources = resourcesRef.current;
+      if (resources.responseTimer) {
+        clearTimeout(resources.responseTimer);
+        resources.responseTimer = null;
+      }
+      if (["assistant_speaking", "thinking"].includes(statusRef.current)) {
+        sendEvent(channel, { type: "response.cancel" });
+        sendEvent(channel, { type: "output_audio_buffer.clear" });
+      }
+    }
+    if (event.type === "input_audio_buffer.speech_stopped") {
+      const resources = resourcesRef.current;
+      if (resources.responseTimer) clearTimeout(resources.responseTimer);
+      resources.responseTimer = setTimeout(() => {
+        resources.responseTimer = null;
+        if (generation === generationRef.current && !mutedRef.current) {
+          sendEvent(channel, { type: "response.create" });
+        }
+      }, 1200);
     }
     if (event.type === "response.function_call_arguments.done") {
       void handleToolCall(event, channel, generation);
@@ -284,6 +303,7 @@ export function useRealtimeVoiceAssistant({ conversationId, draft, metadata, acc
           current_draft: draftRef.current,
           audio_input_profile: resources.audioInputProfile,
           account: account ? { id: account.id, name: account.name, type: account.type, currency: account.currency } : null,
+          beneficiaries: beneficiaries.map(({ id, name, kind }) => ({ id, name, kind })),
         }),
         signal: resources.abortController.signal,
       });
@@ -311,7 +331,7 @@ export function useRealtimeVoiceAssistant({ conversationId, draft, metadata, acc
       resourcesRef.current = {};
       setStatus("error");
     }
-  }, [account, availability, conversationId, handleServerEvent, release]);
+  }, [account, availability, beneficiaries, conversationId, handleServerEvent, release]);
 
   const stop = useCallback(() => release("idle"), [release]);
 

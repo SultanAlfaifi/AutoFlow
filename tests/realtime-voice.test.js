@@ -75,8 +75,14 @@ test("Realtime session uses WebRTC audio, semantic VAD, interruption, and the re
     assert.equal(session.audio.input.transcription.language, "ar");
     assert.equal(session.audio.input.noise_reduction.type, "far_field");
     assert.match(session.instructions, /لهجة سعودية بيضاء/);
+    assert.match(session.instructions, /لا تبدأ الرد عند سكتة قصيرة/);
     assert.equal(session.audio.input.turn_detection.type, "semantic_vad");
+    assert.equal(session.audio.input.turn_detection.eagerness, "low");
+    assert.equal(session.audio.input.turn_detection.create_response, false);
     assert.equal(session.audio.input.turn_detection.interrupt_response, true);
+    const hookSource = fs.readFileSync(new URL("../src/useRealtimeVoiceAssistant.js", import.meta.url), "utf8");
+    assert.match(hookSource, /input_audio_buffer\.speech_stopped[\s\S]*?setTimeout\([\s\S]*?response\.create[\s\S]*?1200/);
+    assert.match(hookSource, /input_audio_buffer\.speech_started[\s\S]*?clearTimeout\(resources\.responseTimer\)/);
     assert.equal(session.tools[0].name, "create_or_update_automation_draft");
     assert.equal(session.tools[0].parameters.properties.draft.additionalProperties, false);
     assert.deepEqual(session.output_modalities, ["audio"]);

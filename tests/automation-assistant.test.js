@@ -40,6 +40,7 @@ import {
 import {
   buildModelContext,
   generateAssistantResult,
+  requestedActionIntents,
 } from "../api/automation-assistant.js";
 import { publishAiDraft } from "../api/automation-publish.js";
 import { convertPlaidAmountToSar } from "../api/plaid-snapshot.js";
@@ -678,4 +679,76 @@ test("57. AutoFlow discovery waits five seconds then spotlights only its navigat
   assert.match(mainSource, /اضغط على AutoFlow لاكتشاف فكرتنا/);
   assert.match(styles, /\.autoflow-discovery-dimmer \{[\s\S]*?radial-gradient\([\s\S]*?41\.6667%/);
   assert.match(styles, /\.autoflow-coachmark \{[\s\S]*?bottom: calc\(108px \+ env\(safe-area-inset-bottom\)\)/);
+});
+
+test("58. compound AI requests preserve every ordered action and explicit approval", async () => {
+  const message = "إذا نزل راتبي، ادفع فاتورة الكهرباء، وبعدها حول 1500 ريال للعامل، وإذا بقي في الحساب أكثر من 5000 ريال، حول 10% إلى الادخار… لكن لا تنفذ أي عملية إلا بعد موافقتي.";
+  assert.deepEqual(requestedActionIntents(message), ["pay-bills", "beneficiary-transfer", "save"]);
+
+  const payload = {
+    ...assistantPayload(message),
+    beneficiaries: [{ id: "worker", name: "العامل", account: "Lean Beneficiary •• 2026", kind: "beneficiary" }],
+  };
+  assert.ok(buildModelContext(payload).available_beneficiaries.some((beneficiary) => beneficiary.id === "worker"));
+
+  const payElectricity = {
+    ...validDraft().actions[0],
+    id: "action-test-conversation-1",
+    type: "pay-bills",
+    amountMode: "fixed",
+    value: "",
+    message: "electricity",
+  };
+  const transferToWorker = {
+    ...validDraft().actions[0],
+    id: "action-test-conversation-2",
+    type: "beneficiary-transfer",
+    amountMode: "fixed",
+    value: "1500",
+    beneficiaryId: "worker",
+    message: "",
+  };
+  const conditionalSavings = {
+    ...validDraft().actions[0],
+    id: "action-test-conversation-3",
+    type: "save",
+    amountMode: "percent",
+    value: "10",
+    beneficiaryId: "",
+    message: "",
+    safety: { ...DEFAULT_SAFETY, minBalanceOn: true, minBalance: "5000" },
+  };
+  const incomplete = {
+    action: "create_draft",
+    assistant_message: "جهزت مسودة السداد.",
+    missing_fields: [],
+    automation: validDraft({
+      name: "سداد الكهرباء",
+      actions: [payElectricity],
+    }),
+  };
+  const complete = {
+    action: "create_draft",
+    assistant_message: "جهزت الطلب كاملًا في ثلاث خطوات مرتبة، وكل خطوة تنتظر موافقتك.",
+    missing_fields: [],
+    automation: validDraft({
+      name: "توزيع الراتب بعد الموافقة",
+      actions: [payElectricity, transferToWorker, conditionalSavings],
+    }),
+  };
+
+  const oldKey = process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY = "test-key";
+  const capture = [];
+  try {
+    const result = await generateAssistantResult(payload, mockOpenAI([incomplete, complete], capture));
+    assert.equal(capture.length, 2);
+    assert.match(capture[1].input[0].content[0].text, /الطلب يحتوي 3 خطوات تنفيذ واضحة/);
+    assert.deepEqual(result.automation.actions.map((action) => action.type), ["pay-bills", "beneficiary-transfer", "save"]);
+    assert.deepEqual(result.automation.actions.map((action) => action.approval.mode), ["always", "always", "always"]);
+    assert.equal(result.automation.actions[1].beneficiaryId, "worker");
+    assert.equal(result.automation.actions[2].safety.minBalance, "5000");
+  } finally {
+    if (oldKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = oldKey;
+  }
 });

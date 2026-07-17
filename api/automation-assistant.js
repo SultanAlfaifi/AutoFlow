@@ -65,6 +65,19 @@ function sanitizeAccount(account) {
   return [{ id, label, type, currency }];
 }
 
+function sanitizeBeneficiaries(beneficiaries) {
+  const supplied = Array.isArray(beneficiaries) ? beneficiaries : [];
+  const trusted = [...SANDBOX_BENEFICIARIES, ...supplied.flatMap((beneficiary) => {
+    if (!beneficiary || typeof beneficiary !== "object") return [];
+    const id = String(beneficiary.id || "").trim().slice(0, 100);
+    const name = String(beneficiary.name || beneficiary.label || "").trim().slice(0, 100);
+    const kind = beneficiary.kind === "internal" ? "internal" : "beneficiary";
+    if (!id || !name || name === "مستفيد بنكي") return [];
+    return [{ id, name, account: String(beneficiary.account || "").slice(0, 120), kind }];
+  })];
+  return [...new Map(trusted.map((beneficiary) => [beneficiary.id, beneficiary])).values()].slice(0, 50);
+}
+
 function safeAmount(value) {
   const amount = Number(value);
   return Number.isFinite(amount) && amount >= 0 ? Math.round(amount * 100) / 100 : null;
@@ -168,7 +181,7 @@ function sanitizeMessages(messages) {
   });
 }
 
-function sanitizeState(state) {
+function sanitizeState(state, beneficiaries = SANDBOX_BENEFICIARIES) {
   if (!state || typeof state !== "object") return {
     user_provided: {},
     inferred_values: {},
@@ -177,7 +190,7 @@ function sanitizeState(state) {
     draft: null,
   };
   const normalizedDraft = state.draft ? normalizeWorkflowShape(state.draft) : null;
-  const draft = normalizedDraft && !validateAutomation(normalizedDraft, { source: "manual" }).length ? normalizedDraft : null;
+  const draft = normalizedDraft && !validateAutomation(normalizedDraft, { source: "manual", beneficiaries }).length ? normalizedDraft : null;
   return {
     user_provided: state.user_provided && typeof state.user_provided === "object" ? state.user_provided : {},
     inferred_values: state.inferred_values && typeof state.inferred_values === "object" ? state.inferred_values : {},
@@ -207,7 +220,8 @@ export function validateAssistantRequest(payload) {
 
 export function buildModelContext(payload) {
   const conversationId = sanitizeConversationId(payload.conversation_id);
-  const state = sanitizeState(payload.state);
+  const beneficiaries = sanitizeBeneficiaries(payload.beneficiaries);
+  const state = sanitizeState(payload.state, beneficiaries);
   const defaults = clone(AI_SAFE_DEFAULTS);
   defaults.draft_ids = buildDraftIds(conversationId);
   defaults.fixed_source_account = "الحساب الجاري المتصل الوحيد؛ لا يوجد له حقل داخل JSON الحالي";
@@ -242,7 +256,7 @@ export function buildModelContext(payload) {
     },
     available_operators: OPERATOR_TYPES,
     available_accounts: sanitizeAccount(payload.account),
-    available_beneficiaries: SANDBOX_BENEFICIARIES.map((item) => ({ id: item.id, label: item.name, type: item.kind })),
+    available_beneficiaries: beneficiaries.map((item) => ({ id: item.id, label: item.name, type: item.kind })),
     safe_defaults: defaults,
     confirmed_values: {
       user_provided: state.user_provided,
@@ -255,6 +269,65 @@ export function buildModelContext(payload) {
     latest_user_message: String(payload.message).trim(),
     current_date: new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()),
   };
+}
+
+export function requestedActionIntents(message) {
+  const clauses = String(message || "")
+    .replace(/[.…]+/gu, "،")
+    .split(/،|(?:^|\s)(?:ثم|بعدها|وبعدها)(?=\s|$)|(?=\sو?إذا\s)/iu)
+    .map((clause) => clause.trim())
+    .filter(Boolean);
+  const intents = [];
+  for (const clause of clauses) {
+    if (/(?:سدد|سدّد|سداد|ادفع|دفع|pay)/iu.test(clause)
+      && /(?:فاتور|اشتراك|كهرب|مياه|موية|مويه|xbox|chat\s*gpt|amazon\s*prime|مستحق)/iu.test(clause)) {
+      intents.push("pay-bills");
+      continue;
+    }
+    if (/(?:حو[ّ]?ل|تحويل)/iu.test(clause)) {
+      intents.push(/ادخار|توفير|savings?/iu.test(clause) ? "save" : "beneficiary-transfer");
+    }
+  }
+  return intents;
+}
+
+function validateRequestCompleteness(envelope, message, currentDraft = null) {
+  if (currentDraft || envelope?.action !== "create_draft" || !envelope.automation) return [];
+  const expected = requestedActionIntents(message);
+  const actual = envelope.automation.actions || [];
+  const issues = [];
+  if (expected.length > actual.length) {
+    issues.push({
+      path: "automation.actions",
+      code: "omitted_requested_actions",
+      message: `الطلب يحتوي ${expected.length} خطوات تنفيذ واضحة، لكن الرد أعاد ${actual.length} فقط. حافظ على كل الخطوات وبالترتيب.`,
+      kind: "structure",
+    });
+  } else {
+    expected.forEach((type, index) => {
+      if (actual[index]?.type !== type) {
+        issues.push({
+          path: `automation.actions[${index}].type`,
+          code: "changed_action_order",
+          message: `الخطوة ${index + 1} يجب أن تبقى من النوع ${type} حسب ترتيب طلب المستخدم.`,
+          kind: "structure",
+        });
+      }
+    });
+  }
+  if (/(?:إلا|فقط).{0,30}(?:بعد|بـ)?\s*موافقتي|لا\s+تنفذ.{0,50}موافقتي/iu.test(message)) {
+    actual.forEach((action, index) => {
+      if (action.approval?.mode !== "always") {
+        issues.push({
+          path: `automation.actions[${index}].approval.mode`,
+          code: "explicit_approval_omitted",
+          message: "طلب المستخدم موافقته قبل كل عملية؛ استخدم always لكل خطوة مالية.",
+          kind: "structure",
+        });
+      }
+    });
+  }
+  return issues;
 }
 
 function buildOpenAIRequest(context, repairIssues = []) {
@@ -306,6 +379,7 @@ function enforceDraftSecurity(envelope, currentDraft) {
 }
 
 function buildLocalBillScenario(message, context) {
+  if (requestedActionIntents(message).length > 1) return null;
   if (!/(?:سدد|سدّد|سداد|ادفع|دفع|pay)/i.test(message)) return null;
   const normalized = message.toLowerCase();
   const aliases = [
@@ -449,15 +523,26 @@ export async function generateAssistantResult(payload, fetchImpl = fetch) {
   }
 
   const context = buildModelContext(payload);
+  const allowedBeneficiaries = sanitizeBeneficiaries(payload.beneficiaries);
+  const completenessMessage = requestedActionIntents(message).length
+    ? message
+    : [...context.recent_messages].reverse()
+      .find((item) => item.role === "user" && requestedActionIntents(item.content).length)?.content || message;
   let envelope = buildLocalBillScenario(message, context);
   let issues;
   if (envelope) {
-    issues = validateAssistantEnvelope(envelope, { beneficiaries: SANDBOX_BENEFICIARIES, requireZeroRuns: !context.current_draft });
+    issues = [
+      ...validateAssistantEnvelope(envelope, { beneficiaries: allowedBeneficiaries, requireZeroRuns: !context.current_draft }),
+      ...validateRequestCompleteness(envelope, completenessMessage, context.current_draft),
+    ];
   } else {
     let openAIResponse = await callOpenAI(buildOpenAIRequest(context), fetchImpl);
     try {
       envelope = enforceDraftSecurity(JSON.parse(extractResponseText(openAIResponse)), context.current_draft);
-      issues = validateAssistantEnvelope(envelope, { beneficiaries: SANDBOX_BENEFICIARIES, requireZeroRuns: !context.current_draft });
+      issues = [
+        ...validateAssistantEnvelope(envelope, { beneficiaries: allowedBeneficiaries, requireZeroRuns: !context.current_draft }),
+        ...validateRequestCompleteness(envelope, completenessMessage, context.current_draft),
+      ];
     } catch (error) {
       issues = [{ path: "response", message: error.message, kind: "structure" }];
     }
@@ -465,7 +550,10 @@ export async function generateAssistantResult(payload, fetchImpl = fetch) {
     if (issues.length && issues.every((item) => item.kind === "structure")) {
       openAIResponse = await callOpenAI(buildOpenAIRequest(context, issues), fetchImpl);
       envelope = enforceDraftSecurity(JSON.parse(extractResponseText(openAIResponse)), context.current_draft);
-      issues = validateAssistantEnvelope(envelope, { beneficiaries: SANDBOX_BENEFICIARIES, requireZeroRuns: !context.current_draft });
+      issues = [
+        ...validateAssistantEnvelope(envelope, { beneficiaries: allowedBeneficiaries, requireZeroRuns: !context.current_draft }),
+        ...validateRequestCompleteness(envelope, completenessMessage, context.current_draft),
+      ];
     }
   }
   if (issues.length) {
@@ -485,12 +573,13 @@ export async function generateAssistantResult(payload, fetchImpl = fetch) {
       candidate: envelope.automation,
       currentDraft: context.current_draft,
       currentMetadata: payload.current_metadata,
+      beneficiaries: allowedBeneficiaries,
     });
     envelope.automation = draftResult.automation;
     if (shouldExplainSafety) envelope.assistant_message = `${envelope.assistant_message} أضفت حدًا أعلى آمنًا يساوي مبلغ كل تحويل ثابت.`;
   }
 
-  const previousState = sanitizeState(payload.state);
+  const previousState = sanitizeState(payload.state, allowedBeneficiaries);
   const nextState = {
     user_provided: {
       ...previousState.user_provided,

@@ -1,7 +1,18 @@
 import { createOrUpdateAutomationDraft } from "../server/automationDraftEngine.js";
 
 const MAX_BODY_BYTES = 96 * 1024;
-const BODY_KEYS = new Set(["operation", "conversation_id", "draft", "current_draft", "current_metadata"]);
+const BODY_KEYS = new Set(["operation", "conversation_id", "draft", "current_draft", "current_metadata", "beneficiaries"]);
+
+function safeBeneficiaries(value) {
+  if (!Array.isArray(value)) return undefined;
+  return value.slice(0, 50).flatMap((beneficiary) => {
+    if (!beneficiary || typeof beneficiary !== "object") return [];
+    const id = String(beneficiary.id || "").trim().slice(0, 100);
+    const name = String(beneficiary.name || "").trim().slice(0, 100);
+    const kind = beneficiary.kind === "internal" ? "internal" : "beneficiary";
+    return id && name && name !== "مستفيد بنكي" ? [{ id, name, account: "", kind }] : [];
+  });
+}
 
 async function readRequestBody(request) {
   if (request.body && typeof request.body === "object") return request.body;
@@ -43,6 +54,7 @@ export function processAutomationDraftTool(payload) {
     candidate: payload.draft,
     currentDraft: payload.current_draft,
     currentMetadata: payload.current_metadata,
+    beneficiaries: safeBeneficiaries(payload.beneficiaries),
   });
 }
 

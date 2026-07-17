@@ -528,7 +528,7 @@ function newAssistantConversation() {
   };
 }
 
-function AutomationAssistant({ account, financialSnapshot, bills, workflows, workflowMetadata, onDraft, openDraft, open, initialMode, onClose }) {
+function AutomationAssistant({ account, financialSnapshot, beneficiaries, bills, workflows, workflowMetadata, onDraft, openDraft, open, initialMode, onClose }) {
   const [conversation, setConversation] = useState(() => {
     const stored = loadObject(AI_CONVERSATION_KEY, null);
     return stored?.conversation_id && Array.isArray(stored.messages) ? stored : newAssistantConversation();
@@ -615,6 +615,7 @@ function AutomationAssistant({ account, financialSnapshot, bills, workflows, wor
           message,
           state: conversation.state,
           account: account ? { id: account.id, name: account.name, type: account.type, currency: account.currency } : null,
+          beneficiaries: beneficiaries?.map(({ id, name, account: beneficiaryAccount, kind }) => ({ id, name, account: beneficiaryAccount, kind })) || [],
           financial_snapshot: financialSnapshot ? {
             source: financialSnapshot.source,
             connected: financialSnapshot.connected,
@@ -684,6 +685,7 @@ function AutomationAssistant({ account, financialSnapshot, bills, workflows, wor
       draft={draft}
       metadata={workflowMetadata?.[draft?.id] || null}
       account={account}
+      beneficiaries={beneficiaries}
       conditionLabels={draft ? draft.conditions.map(conditionLabel) : []}
       actionLabels={draft ? draft.actions.map(actionSummary) : []}
       safetyLabels={draft ? draft.actions.flatMap(actionSafetySummary) : []}
@@ -963,6 +965,7 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
           manual_review_confirmed: true,
           automation: { ...publishTarget, active: false },
           metadata: workflowMetadata[publishTarget.id] || createAiMetadata(),
+          beneficiaries: beneficiaries.map(({ id, name, kind }) => ({ id, name, kind })),
         }),
       });
       const result = await response.json().catch(() => ({}));
@@ -1115,7 +1118,7 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
     <div className="assistant-launcher" aria-label="التواصل مع مساعد AutoFlow">
       <button className="assistant-launcher__chat" type="button" onClick={() => openAssistant("text")} aria-label="فتح مساعد AutoFlow"><Sparkles /><span>اسأل AutoFlow</span></button>
     </div>
-    <AutomationAssistant open={assistantOpen} initialMode={assistantMode} onClose={() => setAssistantOpen(false)} account={financialSnapshot?.account} financialSnapshot={financialSnapshot} bills={bills} workflows={workflows} workflowMetadata={workflowMetadata} onDraft={saveAiDraft} openDraft={openDraftById} />
+    <AutomationAssistant open={assistantOpen} initialMode={assistantMode} onClose={() => setAssistantOpen(false)} account={financialSnapshot?.account} financialSnapshot={financialSnapshot} beneficiaries={beneficiaries} bills={bills} workflows={workflows} workflowMetadata={workflowMetadata} onDraft={saveAiDraft} openDraft={openDraftById} />
     {advancedTarget && <AdvancedWorkflowSettings workflow={advancedTarget} close={() => setAdvancedTarget(null)} save={saveAdvancedSettings} />}
     {editor && <ShortcutEditor workflow={editor} beneficiaries={beneficiaries} account={financialSnapshot?.account} metadata={workflowMetadata[editor.id]} isNew={!workflows.some((workflow) => workflow.id === editor.id)} close={() => setEditor(null)} save={saveWorkflow} requestPublish={requestPublishFromEditor} />}
     {deleteTarget && <div className="shortcut-delete-layer"><section role="dialog" aria-modal="true" aria-labelledby="delete-automation-title"><span className="shortcut-delete-layer__icon"><AlertTriangle /></span><small>حذف نهائي</small><h2 id="delete-automation-title">حذف «{deleteTarget.name}»؟</h2><p>سيتم حذف الأتمتة وكل إعداداتها من هذا الجهاز. لا يمكن التراجع عن هذا الإجراء.</p><div><button type="button" onClick={() => setDeleteTarget(null)}>إلغاء</button><button type="button" onClick={deleteWorkflow}><Trash2 /> حذف الأتمتة نهائيًا</button></div></section></div>}
