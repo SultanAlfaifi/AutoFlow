@@ -920,13 +920,14 @@ function App() {
   const [navExiting, setNavExiting] = useState(false);
   const [toast, setToast] = useState("");
   const [time, setTime] = useState(currentClock);
-  const [showAutoFlowHint, setShowAutoFlowHint] = useState(true);
+  const [showAutoFlowHint, setShowAutoFlowHint] = useState(false);
   const [financialSnapshot, setFinancialSnapshot] = useState(null);
   const [leanConnectBusy, setLeanConnectBusy] = useState(false);
   const [transfers, setTransfers] = useState(() => loadLocalList(TRANSFERS_KEY));
   const [bills, setBills] = useState(loadSandboxBills);
   const financialDataLoaded = useRef(false);
   const navTimerRef = useRef(null);
+  const autoFlowOpenedRef = useRef(false);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -955,6 +956,13 @@ function App() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (!autoFlowOpenedRef.current) setShowAutoFlowHint(true);
+    }, 5000);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   useEffect(() => { storeLocalValue(TRANSFERS_KEY, transfers); }, [transfers]);
   useEffect(() => { storeLocalValue(BILLS_KEY, bills); }, [bills]);
 
@@ -979,6 +987,7 @@ function App() {
     }, 140);
   };
   const openAutoFlow = () => {
+    autoFlowOpenedRef.current = true;
     navigateTo("autoflow");
     setShowAutoFlowHint(false);
     announce("تم فتح مركز AutoFlow");
@@ -1032,7 +1041,7 @@ function App() {
 
   return (
     <main className="stage">
-      <section className="phone" aria-label="نموذج تطبيق الإنماء">
+      <section className={`phone ${showAutoFlowHint && activeNav !== "autoflow" ? "is-autoflow-coaching" : ""}`} aria-label="نموذج تطبيق الإنماء">
         <div className="status-bar" dir="ltr">
           <span className="status-bar__time">{time}</span>
           <div className="status-bar__indicators" aria-hidden="true">
@@ -1140,13 +1149,23 @@ function App() {
           </div>
         </div>
 
+        {showAutoFlowHint && activeNav !== "autoflow" && <>
+          <div className="autoflow-discovery-dimmer" aria-hidden="true" />
+          <button type="button" className="autoflow-coachmark" onClick={openAutoFlow} aria-label="اضغط للانتقال إلى AutoFlow">
+            <strong>ابدأ من هنا</strong>
+            <span>اضغط على AutoFlow لاكتشاف فكرتنا</span>
+          </button>
+        </>}
+
         <nav className="bottom-nav" aria-label="التنقل الرئيسي">
           {navItems.map(({ id, label, icon: Icon, featured }) => (
             <button key={id} aria-current={activeNav === id ? "page" : undefined} className={`${activeNav === id ? "active" : ""} ${featured ? "featured" : ""}`} onClick={() => {
               navigateTo(id);
-              if (id === "autoflow") setShowAutoFlowHint(false);
+              if (id === "autoflow") {
+                autoFlowOpenedRef.current = true;
+                setShowAutoFlowHint(false);
+              }
             }}>
-              {featured && showAutoFlowHint && activeNav === "home" && <span className="autoflow-coachmark" aria-hidden="true">جديد · جرّب AutoFlow</span>}
               {featured && activeNav !== "autoflow" && <span className="autoflow-new-badge" aria-hidden="true">جديد</span>}
               <span className="nav-icon"><Icon /></span>
               <span>{label}</span>

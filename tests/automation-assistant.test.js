@@ -668,3 +668,14 @@ test("56. voice draft and app navigation use touch scrolling and smooth transiti
   assert.match(shortcutStyles, /@keyframes assistant-drawer-in \{[\s\S]*?translateY\(100%\)[\s\S]*?translateY\(0\)/);
   assert.match(shortcutStyles, /\.automation-assistant--drawer::before \{[\s\S]*?width: 38px;[\s\S]*?height: 5px;/);
 });
+
+test("57. AutoFlow discovery waits five seconds then spotlights only its navigation target", async () => {
+  const mainSource = await readFile(new URL("../src/main.jsx", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
+  assert.match(mainSource, /useState\(false\)/);
+  assert.match(mainSource, /window\.setTimeout\(\(\) => \{[\s\S]*?setShowAutoFlowHint\(true\);[\s\S]*?\}, 5000\)/);
+  assert.match(mainSource, /className="autoflow-discovery-dimmer"/);
+  assert.match(mainSource, /اضغط على AutoFlow لاكتشاف فكرتنا/);
+  assert.match(styles, /\.autoflow-discovery-dimmer \{[\s\S]*?radial-gradient\([\s\S]*?41\.6667%/);
+  assert.match(styles, /\.autoflow-coachmark \{[\s\S]*?bottom: calc\(108px \+ env\(safe-area-inset-bottom\)\)/);
+});
