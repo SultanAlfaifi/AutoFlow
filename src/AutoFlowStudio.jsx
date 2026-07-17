@@ -43,6 +43,7 @@ import {
   BILL_PAYMENT_TARGETS,
   DEFAULT_SCHEDULE,
   SANDBOX_BENEFICIARIES,
+  SANDBOX_BILL_SERVICES,
   TRIGGER_TYPES,
   createAiMetadata,
   makeAction,
@@ -84,6 +85,7 @@ const actionTypeDefinitions = [
   { id: "pause", label: "إيقاف أتمتات أخرى", icon: Pause },
 ];
 const actionTypes = ACTION_TYPES.map((id) => actionTypeDefinitions.find((item) => item.id === id));
+const subscriptionServices = SANDBOX_BILL_SERVICES.filter((service) => service.kind === "subscription");
 
 const automationIcons = [
   { id: "sparkles", label: "عام", icon: Sparkles },
@@ -312,7 +314,11 @@ function ShortcutEditor({ workflow, beneficiaries, account, metadata, close, sav
                     </div>}
                     {condition.type && !["balance-below", "month-end", "scheduled"].includes(condition.type) && <div className="inline-settings"><select aria-label="تحديد مبلغ الحدث" value={condition.operator} onChange={(event) => updateCondition(condition.id, { operator: event.target.value })}><option value="any">مهما كان المبلغ</option><option value="gte">إذا كان المبلغ يساوي أو يزيد عن</option><option value="lte">إذا كان المبلغ يساوي أو يقل عن</option></select>{condition.operator !== "any" && <input aria-label="قيمة المبلغ" type="number" min="0" value={condition.value} onChange={(event) => updateCondition(condition.id, { value: event.target.value })} placeholder="اكتب المبلغ" />}</div>}
                     {condition.type === "balance-below" && <input type="number" min="0" value={condition.value} onChange={(event) => updateCondition(condition.id, { value: event.target.value })} placeholder="حد الرصيد" />}
-                    {condition.type === "subscription" && <input value={condition.merchant} onChange={(event) => updateCondition(condition.id, { merchant: event.target.value })} placeholder="اسم الجهة، مثل Netflix (اختياري)" />}
+                    {condition.type === "subscription" && <label><span>اختر الاشتراك</span><select aria-label="اختر الاشتراك" value={condition.merchant} onChange={(event) => updateCondition(condition.id, { merchant: event.target.value })}>
+                      <option value="">أي اشتراك دوري</option>
+                      {condition.merchant && !subscriptionServices.some((service) => service.name === condition.merchant) && <option value={condition.merchant}>{condition.merchant}</option>}
+                      {subscriptionServices.map((service) => <option key={service.id} value={service.name}>{service.name}</option>)}
+                    </select></label>}
                   </div>
                   <button className="block-delete" type="button" onClick={() => update({ conditions: draft.conditions.filter((item) => item.id !== condition.id) })} aria-label="حذف الشرط"><Trash2 /></button>
                   </article>

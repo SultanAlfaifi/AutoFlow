@@ -494,3 +494,10 @@ test("44. clear bill scenarios create a safe local AI draft without an OpenAI ke
   assert.equal(result.automation.actions[0].message, "chatgpt");
   assert.equal(result.automation.actions[0].approval.mode, "always");
 });
+
+test("45. manual subscription triggers use the trusted service dropdown", async () => {
+  const source = await readFile(new URL("../src/AutoFlowStudio.jsx", import.meta.url), "utf8");
+  assert.match(source, /select aria-label="اختر الاشتراك"/);
+  assert.match(source, /subscriptionServices\.map/);
+  assert.doesNotMatch(source, /placeholder="اسم الجهة، مثل Netflix/);
+});
