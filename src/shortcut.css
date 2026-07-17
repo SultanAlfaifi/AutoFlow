@@ -677,7 +677,7 @@
   position: absolute;
   z-index: 45;
   right: 14px;
-  bottom: 88px;
+  bottom: 104px;
   max-width: calc(100% - 28px);
   display: flex;
   align-items: center;
@@ -853,7 +853,7 @@
 [data-theme="dark"] .create-automation-primary { color: #073b4b; }
 
 @media (max-width: 600px), (max-height: 600px) and (pointer: coarse) {
-  .assistant-launcher { right: 12px; bottom: calc(86px + env(safe-area-inset-bottom)); }
+  .assistant-launcher { right: 12px; bottom: calc(104px + env(safe-area-inset-bottom)); }
   .automation-assistant--drawer {
     right: 8px;
     bottom: calc(80px + env(safe-area-inset-bottom));

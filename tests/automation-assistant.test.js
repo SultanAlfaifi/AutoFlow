@@ -638,6 +638,8 @@ test("54. phone viewports use the full screen while the assistant stays inside t
   assert.match(styles, /env\(safe-area-inset-bottom\)/);
   assert.match(shortcutStyles, /@media \(max-width: 600px\), \(max-height: 600px\) and \(pointer: coarse\)/);
   assert.match(shortcutStyles, /\.assistant-launcher \{[\s\S]*?max-width: calc\(100% - 28px\)/);
+  assert.match(shortcutStyles, /\.assistant-launcher \{[\s\S]*?bottom: 104px;/);
+  assert.match(shortcutStyles, /bottom: calc\(104px \+ env\(safe-area-inset-bottom\)\)/);
   assert.match(shortcutStyles, /width: min\(520px, calc\(100% - 16px\)\)/);
 });
 
