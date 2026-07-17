@@ -27,7 +27,16 @@ import {
   validateAssistantEnvelope,
   validateAutomation,
 } from "../src/automationContract.js";
-import { evaluateWorkflow, resolveActionAmount, resolveScheduledCondition } from "../src/workflowEngine.js";
+import {
+  actionNeedsApproval,
+  dateKeyInTimezone,
+  dueBillsForAction,
+  evaluateSafety,
+  evaluateWorkflow,
+  resolveActionAmount,
+  resolveExecutionAmount,
+  resolveScheduledCondition,
+} from "../src/workflowEngine.js";
 import {
   buildModelContext,
   generateAssistantResult,
@@ -531,7 +540,91 @@ test("47. automation destinations keep trusted names and match the transfer type
 
   const mainSource = await readFile(new URL("../src/main.jsx", import.meta.url), "utf8");
   const studioSource = await readFile(new URL("../src/AutoFlowStudio.jsx", import.meta.url), "utf8");
-  assert.match(mainSource, /beneficiaries=\{SANDBOX_BENEFICIARIES\}/);
+  assert.match(mainSource, /beneficiaries=\{beneficiaries\}/);
+  assert.match(mainSource, /mergeBeneficiaries\(financialSnapshot\?\.beneficiaries\)/);
   assert.match(studioSource, /getActionDestinations\(action\.type, beneficiaries\)/);
   assert.match(studioSource, /\{item\.name\} — \{item\.account\}/);
+});
+
+test("48. manual automations receive the same financial safety validation", () => {
+  const excessive = validDraft();
+  excessive.active = true;
+  excessive.actions[0].value = "150";
+  assert.ok(validateAutomation(excessive, { source: "manual" }).some((item) => item.code === "invalid_percentage"));
+
+  const unknownDestination = validDraft();
+  unknownDestination.active = true;
+  unknownDestination.actions[0] = {
+    ...unknownDestination.actions[0],
+    type: "beneficiary-transfer",
+    beneficiaryId: "invented-beneficiary",
+  };
+  assert.ok(validateAutomation(unknownDestination, { source: "manual" }).some((item) => item.code === "unknown_beneficiary"));
+});
+
+test("49. bill approval and safety use the real due total", () => {
+  const action = {
+    ...validDraft().actions[0],
+    type: "pay-bills",
+    value: "",
+    message: "chatgpt",
+    approval: { mode: "above", threshold: "70" },
+  };
+  const bills = [
+    { id: "due-chatgpt", serviceId: "chatgpt", status: "due", amount: 75 },
+    { id: "paid-chatgpt", serviceId: "chatgpt", status: "paid", amount: 75 },
+    { id: "due-water", serviceId: "water", status: "due", amount: 95 },
+  ];
+  const run = { primaryFact: null, percentageBase: 0 };
+  assert.deepEqual(dueBillsForAction(action, bills).map((bill) => bill.id), ["due-chatgpt"]);
+  assert.equal(resolveExecutionAmount(action, run, bills), 75);
+  assert.equal(actionNeedsApproval(action, 75), true);
+  assert.equal(actionNeedsApproval(action, 70), false);
+  assert.deepEqual(evaluateSafety({ ...action, safety: { ...action.safety, minBalanceOn: true, minBalance: "50" } }, 75, {
+    balance: 100,
+    todayTransfers: 0,
+    now: "2026-07-17T09:00:00.000Z",
+    timezone: "Asia/Riyadh",
+  }), ["الحد الأدنى للرصيد"]);
+});
+
+test("50. local date and allowed execution hours use Riyadh time safely", () => {
+  assert.equal(dateKeyInTimezone("2026-07-16T22:30:00.000Z"), "2026-07-17");
+  assert.equal(dateKeyInTimezone("not-a-date"), "");
+  const action = {
+    ...validDraft().actions[0],
+    safety: { ...validDraft().actions[0].safety, hoursOn: true, startHour: "6", endHour: "23" },
+  };
+  assert.deepEqual(evaluateSafety(action, 10, {
+    balance: 1000,
+    todayTransfers: 0,
+    now: "2026-07-16T22:30:00.000Z",
+    timezone: "Asia/Riyadh",
+  }), ["وقت التنفيذ المسموح"]);
+});
+
+test("51. subscription test scenarios use the same trusted services as the manual editor", async () => {
+  const studioSource = await readFile(new URL("../src/AutoFlowStudio.jsx", import.meta.url), "utf8");
+  assert.match(studioSource, /const subscriptionTestEvents = SANDBOX_BILL_SERVICES/);
+  assert.match(studioSource, /triggerType: "subscription"/);
+  for (const service of SANDBOX_BILL_SERVICES.filter((item) => item.kind === "subscription")) {
+    assert.ok(studioSource.includes("subscriptionTestEvents"), `missing subscription test source for ${service.name}`);
+  }
+});
+
+test("52. sequential financial actions reserve the projected outflow before checking the next step", async () => {
+  const studioSource = await readFile(new URL("../src/AutoFlowStudio.jsx", import.meta.url), "utf8");
+  assert.match(studioSource, /balance: Math\.max\(0, balance - projectedOutflow\)/);
+  assert.match(studioSource, /todayTransfers: todayTransfers \+ projectedOutflow/);
+  assert.match(studioSource, /projectedOutflow \+= amount/);
+  assert.match(studioSource, /if \(status === "pending"\) break/);
+});
+
+test("53. the app merges connected Lean beneficiaries without dropping trusted existing destinations", async () => {
+  const mainSource = await readFile(new URL("../src/main.jsx", import.meta.url), "utf8");
+  assert.match(mainSource, /function mergeBeneficiaries\(providerBeneficiaries = \[\]\)/);
+  assert.match(mainSource, /usableProviderBeneficiaries/);
+  assert.match(mainSource, /beneficiary\.name !== "مستفيد بنكي"/);
+  assert.match(mainSource, /\[\.\.\.SANDBOX_BENEFICIARIES, \.\.\.usableProviderBeneficiaries\]/);
+  assert.match(mainSource, /beneficiaries=\{beneficiaries\}/);
 });

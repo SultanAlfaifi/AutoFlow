@@ -81,6 +81,43 @@ test("Lean data is normalized into the existing AutoFlow snapshot contract", asy
   });
 });
 
+test("Lean preserves a negative bank balance instead of turning an overdraft positive", async () => {
+  resetLeanCachesForTests();
+  const calls = [];
+  const baseFetch = leanFetch(calls);
+  const snapshot = await getLeanSnapshot({
+    env: leanEnv,
+    fetchImpl: async (url, init) => String(url).includes("/balances?")
+      ? jsonResponse({ balances: [
+        { balance_type: "CLOSING_AVAILABLE", amount: { value: "-125.50", currency: "SAR" } },
+        { balance_type: "INTERIM_BOOKED", amount: { value: "-100", currency: "SAR" } },
+      ] })
+      : baseFetch(url, init),
+  });
+  assert.equal(snapshot.account.availableBalance, -125.5);
+  assert.equal(snapshot.account.currentBalance, -100);
+});
+
+test("Lean refreshes an expired API token once after an unauthorized response", async () => {
+  resetLeanCachesForTests();
+  const calls = [];
+  const baseFetch = leanFetch(calls);
+  let rejectedAccountsRequest = false;
+  const snapshot = await getLeanSnapshot({
+    env: leanEnv,
+    fetchImpl: async (url, init) => {
+      if (String(url).includes("/data/v2/accounts?") && !rejectedAccountsRequest) {
+        rejectedAccountsRequest = true;
+        calls.push({ url: String(url), init });
+        return jsonResponse({ message: "expired token" }, 401);
+      }
+      return baseFetch(url, init);
+    },
+  });
+  assert.equal(snapshot.connected, true);
+  assert.equal(calls.filter((call) => call.url.includes("/oauth2/token")).length, 2);
+});
+
 test("a linked Lean entity stays in syncing state until account data is ready", async () => {
   resetLeanCachesForTests();
   const calls = [];

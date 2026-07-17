@@ -53,7 +53,7 @@
 .create-automation-primary:active { transform: scale(.99); }
 .create-automation-primary:focus-visible { outline: 3px solid rgba(239, 121, 95, .4); outline-offset: 3px; }
 
-.automation-empty-state { min-height: 430px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 28px 20px; border: 1px solid #ddd6d0; border-radius: 12px; text-align: center; background: white; animation: shortcut-fade-up .35s ease both; }
+.automation-empty-state { min-height: 430px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 28px 20px; border: 1px solid #ddd6d0; border-radius: 12px; color: #073d4d; text-align: center; background: white; animation: shortcut-fade-up .35s ease both; }
 .automation-empty-state__icon { width: 60px; height: 60px; display: grid; place-items: center; margin-bottom: 13px; border-radius: 16px; color: #b7433b; background: #ffe5e1; }
 .automation-empty-state__icon svg { width: 28px; }
 .automation-empty-state > small { color: #e05f55; font-size: 10px; font-weight: 900; }
@@ -65,7 +65,7 @@
 .automation-empty-state__steps span { display: flex; align-items: center; gap: 8px; color: #597078; font-size: 9px; }
 .automation-empty-state__steps b { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; color: white; background: #007087; }
 
-.event-console { border: 1px solid #d9d4cf; border-radius: 12px; padding: 15px; background: #fff; box-shadow: 0 8px 24px rgba(17, 54, 65, .05); }
+.event-console { border: 1px solid #d9d4cf; border-radius: 12px; padding: 15px; color: #073d4d; background: #fff; box-shadow: 0 8px 24px rgba(17, 54, 65, .05); }
 .event-console__heading { display: grid; grid-template-columns: 30px minmax(0, 1fr) 38px; gap: 10px; align-items: start; }
 .event-console__step { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; color: white; background: #ef6d61; font-size: 13px; font-weight: 900; }
 .event-console__heading small { color: #df5c52; font-size: 10px; font-weight: 800; }
@@ -130,7 +130,7 @@
 .workflow-category-filter__more > button[aria-expanded="true"] svg { transform: rotate(180deg); }
 .workflow-category-filter__more [role="menu"] { position: absolute; z-index: 12; top: calc(100% + 6px); right: 0; display: grid; min-width: 126px; padding: 5px; border: 1px solid #d9d3ce; border-radius: 8px; background: white; box-shadow: 0 10px 22px rgba(7, 44, 54, .16); animation: shortcut-fade-up .16s ease both; }
 .workflow-category-filter__more [role="menu"] button { width: 100%; justify-content: flex-start; text-align: right; }
-.shortcut-card { overflow: hidden; margin-bottom: 10px; border: 1px solid #e1ddd9; border-radius: 14px; background: white; box-shadow: 0 5px 16px rgba(7, 52, 65, .045); animation: shortcut-fade-up .3s ease both; }
+.shortcut-card { overflow: hidden; margin-bottom: 10px; border: 1px solid #e1ddd9; border-radius: 14px; color: #073d4d; background: white; box-shadow: 0 5px 16px rgba(7, 52, 65, .045); animation: shortcut-fade-up .3s ease both; }
 .shortcut-card.is-active { border-right: 3px solid var(--automation-color, #ff897c); }
 .shortcut-card__top { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 12px; }
 .shortcut-card__icon { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 8px; color: var(--automation-color, #b9423b); background: color-mix(in srgb, var(--automation-color, #ef795f) 14%, white); }
@@ -160,6 +160,8 @@
 .shortcut-filter-empty svg { width: 24px; }
 .shortcut-filter-empty strong { color: #31535d; font-size: 12px; }
 .shortcut-filter-empty span { font-size: 10px; }
+.shortcut-filter-empty button { display: flex; align-items: center; gap: 5px; margin-top: 5px; padding: 8px 11px; border: 0; border-radius: 8px; color: #073b4b; background: #ff897c; font-size: 10px; font-weight: 900; }
+.shortcut-filter-empty button svg { width: 14px; }
 
 .shortcut-history > header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .shortcut-log { display: grid; grid-template-columns: 9px 1fr auto; align-items: center; gap: 9px; padding: 11px 8px; border-bottom: 1px solid #e7e0db; }
@@ -189,7 +191,7 @@
 .shortcut-delete-layer button:last-child { display: flex; align-items: center; justify-content: center; gap: 5px; border-color: #d34f48; color: white; background: #d95b53; }
 .shortcut-delete-layer button svg { width: 15px; }
 .shortcut-editor-layer.is-closing { animation: shortcut-backdrop-out .2s ease both; }
-.shortcut-editor { position: relative; width: 100%; max-height: calc(100% - 26px); display: flex; flex-direction: column; overflow: hidden; border-radius: 18px 18px 0 0; background: #f7f4f1; box-shadow: 0 -12px 40px rgba(0,0,0,.18); animation: shortcut-sheet-in .32s cubic-bezier(.2,.8,.2,1) both; }
+.shortcut-editor { position: relative; width: 100%; max-height: calc(100% - 26px); display: flex; flex-direction: column; overflow: hidden; border-radius: 18px 18px 0 0; color: #073d4d; background: #f7f4f1; box-shadow: 0 -12px 40px rgba(0,0,0,.18); animation: shortcut-sheet-in .32s cubic-bezier(.2,.8,.2,1) both; }
 .shortcut-editor-layer.is-closing .shortcut-editor { animation: shortcut-sheet-out .2s ease both; }
 .shortcut-editor__header { flex: 0 0 auto; display: grid; grid-template-columns: 40px minmax(0, 1fr) 40px auto; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid #ddd6d0; background: white; border-radius: 18px 18px 0 0; }
 .shortcut-editor__title { min-width: 0; }
@@ -208,7 +210,7 @@
 .shortcut-editor__progress i { height: 1px; background: #ddd6d0; }
 .shortcut-validation { display: grid; gap: 2px; padding: 9px 14px; border-bottom: 1px solid #f0c8bd; color: #9e4032; background: #fff0ed; font-size: 10px; }
 .shortcut-validation strong { font-size: 11px; }
-.shortcut-validation span { color: #715f5b; }
+.shortcut-validation ul { display: grid; gap: 3px; margin: 3px 0 0; padding-right: 17px; color: #715f5b; }
 .field-help--fixed { padding: 8px 10px; border: 1px solid #bce2d4; border-radius: 8px; color: #197154; background: #effaf5; }
 .shortcut-editor__scroll { overflow-y: auto; padding: 14px 14px 90px; }
 .shortcut-identity { display: grid; gap: 13px; margin-bottom: 12px; padding: 14px; border: 1px solid color-mix(in srgb, var(--automation-color) 32%, #ddd6d0); border-top: 4px solid var(--automation-color); border-radius: 10px; background: white; animation: shortcut-fade-up .32s ease both; }
@@ -347,7 +349,7 @@
 .action-block__tools svg { width: 13px; }
 
 .shortcut-guide-layer { position: absolute; z-index: 5; inset: 0; display: flex; align-items: flex-end; padding: 12px; background: rgba(0, 31, 42, .52); backdrop-filter: blur(4px); }
-.shortcut-guide { width: 100%; max-height: calc(100% - 12px); display: flex; flex-direction: column; overflow: hidden; border-radius: 12px; background: #fff; box-shadow: 0 16px 50px rgba(0,0,0,.25); }
+.shortcut-guide { width: 100%; max-height: calc(100% - 12px); display: flex; flex-direction: column; overflow: hidden; border-radius: 12px; color: #073d4d; background: #fff; box-shadow: 0 16px 50px rgba(0,0,0,.25); }
 .shortcut-guide > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px; border-bottom: 1px solid #e7e0db; background: #f7faf9; }
 .shortcut-guide > header > div { display: flex; align-items: center; gap: 9px; }
 .shortcut-guide > header svg { width: 24px; color: #007087; }
@@ -425,6 +427,8 @@
 [data-theme="dark"] .advanced-settings, [data-theme="dark"] .advanced-settings > header, [data-theme="dark"] .advanced-action-settings, [data-theme="dark"] .advanced-settings > footer,
 [data-theme="dark"] .sandbox-beneficiaries button, [data-theme="dark"] .autoflow-transfer-history, [data-theme="dark"] .sandbox-bills { background: #073543; border-color: #31545e; color: #f2f6f7; }
 [data-theme="dark"] .event-grid button, [data-theme="dark"] .shortcut-pipeline, [data-theme="dark"] .safety-setting, [data-theme="dark"] .advanced-action-settings__title, [data-theme="dark"] .shortcut-card__advanced { background: #0c3d4b; border-color: #31545e; color: #f2f6f7; }
+[data-theme="dark"] .shortcut-editor__title strong { color: #f2f6f7; }
+[data-theme="dark"] .shortcut-editor__title span { color: #a8bbc3; }
 [data-theme="dark"] .field-example { color: #c4d3d6; background: #0c3d4b; }
 [data-theme="dark"] .advanced-settings__section, [data-theme="dark"] .advanced-action-settings__title { border-color: #31545e; }
 [data-theme="dark"] .advanced-settings .safety-setting > input, [data-theme="dark"] .advanced-settings .hour-fields input, [data-theme="dark"] .advanced-threshold input, [data-theme="dark"] .advanced-settings .approval-choice button { border-color: #31545e; color: #f2f6f7; background: #062e3a; }
@@ -550,6 +554,7 @@
 @keyframes voice-wave { from { height: 6px; } to { height: 25px; } }
 
 .shortcut-card.needs-review { border-color: #e4b35e; background: #fffdf8; }
+[data-theme="dark"] .shortcut-card.needs-review { color: #073d4d; background: #fffdf8; }
 .ai-review-badge { display: flex; align-items: center; gap: 5px; padding: 6px 12px; color: #8b5a08; background: #fff2d7; font-size: 9px; font-weight: 900; }
 .ai-review-badge svg { width: 13px; }
 .review-ai-button { border: 1px solid #d69b38; border-radius: 7px; padding: 7px 5px; color: #7b4d00; background: #fff3d9; font-size: 8px; font-weight: 900; }

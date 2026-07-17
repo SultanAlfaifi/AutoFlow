@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowDown,
@@ -35,7 +35,14 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { actionNeedsApproval, evaluateSafety, evaluateWorkflow, resolveActionAmount } from "./workflowEngine.js";
+import {
+  actionNeedsApproval,
+  dateKeyInTimezone,
+  dueBillsForAction,
+  evaluateSafety,
+  evaluateWorkflow,
+  resolveExecutionAmount,
+} from "./workflowEngine.js";
 import VoiceAssistant from "./VoiceAssistant.jsx";
 import {
   ACTION_TYPES,
@@ -70,18 +77,31 @@ const eventTypeDefinitions = [
   { id: "incoming", label: "وصلت حوالة", hint: "حوالة واردة تجريبية بقيمة 250", icon: WalletCards, amount: 250, direction: "inflow", description: "Incoming Transfer", primary: true },
   { id: "bill-due", label: "فاتورة مستحقة", hint: "إنشاء فاتورة كهرباء بقيمة 120", icon: ReceiptText, amount: 120, direction: "outflow", description: "Electricity Bill Due", primary: true },
   { id: "large-expense", label: "تم شراء كبير", hint: "عملية شراء تجريبية بقيمة 350", icon: ShoppingCart, amount: 350, direction: "outflow", description: "Large Card Purchase", primary: true },
-  { id: "subscription", label: "حان موعد اشتراك", hint: "خصم اشتراك تجريبي بقيمة 15", icon: Repeat2, amount: 15, direction: "outflow", description: "Netflix Subscription" },
+  { id: "subscription", label: "حان موعد اشتراك", hint: "اختر اشتراكًا محددًا من سيناريوهات الاختبار", icon: Repeat2, amount: 0, direction: "outflow", description: "Subscription Due", hiddenFromConsole: true },
   { id: "balance-below", label: "الرصيد أصبح منخفضاً", hint: "محاكاة وصول الرصيد إلى حد منخفض", icon: ShieldCheck, amount: 50, localOnly: true },
   { id: "month-end", label: "وصلنا لنهاية الشهر", hint: "تشغيل أتمتات نهاية الشهر", icon: CalendarClock, amount: 0, localOnly: true },
   { id: "scheduled", label: "موعد محدد أو متكرر", hint: "يعمل تلقائيًا حسب التاريخ والوقت", icon: CalendarClock, amount: 0, localOnly: true, hiddenFromConsole: true },
 ];
 const eventTypes = TRIGGER_TYPES.map((id) => eventTypeDefinitions.find((item) => item.id === id));
+const subscriptionTestEvents = SANDBOX_BILL_SERVICES
+  .filter((service) => service.kind === "subscription")
+  .map((service) => ({
+    id: `subscription-${service.id}`,
+    triggerType: "subscription",
+    label: `استحقاق ${service.name}`,
+    hint: `اشتراك تجريبي بقيمة ${service.amount} ر.س`,
+    icon: Repeat2,
+    amount: service.amount,
+    direction: "outflow",
+    description: service.name,
+    localOnly: true,
+  }));
 
 const actionTypeDefinitions = [
   { id: "save", label: "تحويل للادخار", icon: CircleDollarSign, money: true },
   { id: "internal-transfer", label: "تحويل داخلي", icon: ArrowLeftRight, money: true },
   { id: "beneficiary-transfer", label: "تحويل لمستفيد", icon: WalletCards, money: true },
-  { id: "split", label: "تقسيم المبلغ", icon: Workflow, money: true },
+  { id: "split", label: "تخصيص جزء من المبلغ", icon: Workflow, money: true },
   { id: "pay-bills", label: "سداد المستحقات", icon: ReceiptText, money: true },
   { id: "notify", label: "إرسال إشعار", icon: Bell },
   { id: "categorize", label: "تصنيف المصروف", icon: ListChecks },
@@ -160,8 +180,29 @@ function loadObject(key, fallback = {}) {
   }
 }
 
+function storeLocal(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function loadWorkflows() {
+  return loadList(WORKFLOWS_KEY, [])
+    .map(normalizeWorkflowShape)
+    .filter((workflow) => validateAutomation(workflow, { source: "manual" }).length === 0);
+}
+
 function formatMoney(value, currency = "USD") {
   return new Intl.NumberFormat("ar-SA", { style: "currency", currency, maximumFractionDigits: 2 }).format(Number(value || 0));
+}
+
+function stepCountLabel(count) {
+  if (count === 1) return "خطوة واحدة";
+  if (count === 2) return "خطوتان";
+  return `${count} خطوات`;
 }
 
 function conditionLabel(condition) {
@@ -213,7 +254,7 @@ function AutomationIcon({ iconId = "sparkles" }) {
   return <Icon />;
 }
 
-function ShortcutEditor({ workflow, beneficiaries, account, metadata, close, save, requestPublish }) {
+function ShortcutEditor({ workflow, beneficiaries, account, metadata, isNew, close, save, requestPublish }) {
   const [draft, setDraft] = useState(() => structuredClone({
     ...normalizeWorkflowShape(workflow),
     category: workflow.category || "شخصية",
@@ -264,7 +305,7 @@ function ShortcutEditor({ workflow, beneficiaries, account, metadata, close, sav
       <section className="shortcut-editor" role="dialog" aria-modal="true" aria-label="محرر أتمتة متقدم">
         <header className="shortcut-editor__header">
           <button type="button" onClick={requestClose} aria-label="إغلاق"><X /></button>
-          <div className="shortcut-editor__title"><span>إنشاء أتمتة جديدة</span><strong>رتّبها بالطريقة التي تناسبك</strong></div>
+          <div className="shortcut-editor__title"><span>{isNew ? "إنشاء أتمتة جديدة" : "تعديل الأتمتة"}</span><strong>{draft.name || "رتّبها بالطريقة التي تناسبك"}</strong></div>
           <button type="button" className="shortcut-help-button" onClick={() => setGuideOpen(true)} aria-label="شرح طريقة بناء الأتمتة" title="شرح طريقة بناء الأتمتة"><CircleHelp /></button>
           <div className="shortcut-editor__primary-actions">
             <button type="button" className="save-shortcut" onClick={requestSave}><CheckCircle2 /> {isAiDraft ? "حفظ للمراجعة" : "حفظ"}</button>
@@ -274,7 +315,7 @@ function ShortcutEditor({ workflow, beneficiaries, account, metadata, close, sav
 
         <div className="shortcut-editor__progress shortcut-editor__progress--simple"><span className={draft.conditions.length ? "is-done" : ""}>1 حدث البدء</span><i /><span className={draft.actions.length ? "is-done" : ""}>2 خطوات التنفيذ</span></div>
         {isAiDraft && <div className="ai-review-banner" role="status"><Sparkles /><div><strong>تحتاج إلى مراجعة</strong><span>تم إنشاء هذه المسودة باستخدام الذكاء الاصطناعي، ولم يتم تفعيلها. راجع جميع الخطوات قبل النشر.</span><small>المصدر: {account?.name || "الحساب الجاري المتصل"} · وجهة الادخار الثابتة: {beneficiaries.find((item) => item.kind === "internal")?.name || "حساب الادخار"}</small></div></div>}
-        {showValidation && !isComplete && <div className="shortcut-validation" role="alert"><strong>باقي خطوة بسيطة قبل الحفظ</strong><span>{issues[0]}</span></div>}
+        {showValidation && !isComplete && <div className="shortcut-validation" role="alert"><strong>أكمل التالي قبل الحفظ</strong><ul>{issues.slice(0, 3).map((message) => <li key={message}>{message}</li>)}</ul></div>}
 
         <div className="shortcut-editor__scroll">
           <section className="shortcut-identity" style={{ "--automation-color": automationColor(draft.color) }}>
@@ -317,7 +358,7 @@ function ShortcutEditor({ workflow, beneficiaries, account, metadata, close, sav
                       <small>المنطقة الزمنية: الرياض (Asia/Riyadh)</small>
                     </div>}
                     {condition.type && !["balance-below", "month-end", "scheduled"].includes(condition.type) && <div className="inline-settings"><select aria-label="تحديد مبلغ الحدث" value={condition.operator} onChange={(event) => updateCondition(condition.id, { operator: event.target.value })}><option value="any">مهما كان المبلغ</option><option value="gte">إذا كان المبلغ يساوي أو يزيد عن</option><option value="lte">إذا كان المبلغ يساوي أو يقل عن</option></select>{condition.operator !== "any" && <input aria-label="قيمة المبلغ" type="number" min="0" value={condition.value} onChange={(event) => updateCondition(condition.id, { value: event.target.value })} placeholder="مثال: 500" />}</div>}
-                    {condition.type === "balance-below" && <input type="number" min="0" value={condition.value} onChange={(event) => updateCondition(condition.id, { value: event.target.value })} placeholder="مثال: 1000" />}
+                    {condition.type === "balance-below" && <label><span>الرصيد أقل من</span><input aria-label="حد الرصيد المنخفض" type="number" min="0" value={condition.value} onChange={(event) => updateCondition(condition.id, { value: event.target.value })} placeholder="مثال: 1000" /></label>}
                     {condition.type === "subscription" && <label><span>اختر الاشتراك</span><select aria-label="اختر الاشتراك" value={condition.merchant} onChange={(event) => updateCondition(condition.id, { merchant: event.target.value })}>
                       <option value="">أي اشتراك دوري</option>
                       {condition.merchant && !subscriptionServices.some((service) => service.name === condition.merchant) && <option value={condition.merchant}>{condition.merchant}</option>}
@@ -336,7 +377,7 @@ function ShortcutEditor({ workflow, beneficiaries, account, metadata, close, sav
           <div className="shortcut-connector"><i /><span>ثم نفّذ بالترتيب</span><i /></div>
 
           <section className="shortcut-block-section shortcut-block-section--actions">
-            <div className="shortcut-section-heading"><div><small>ماذا تفعل الأتمتة؟</small><h2>خطوات التنفيذ بالترتيب</h2><p>تُنفذ الخطوة رقم 1 أولاً، ثم التي تحتها. سنطلب موافقتك دائمًا بشكل افتراضي.</p></div><span>{draft.actions.length} خطوات</span></div>
+            <div className="shortcut-section-heading"><div><small>ماذا تفعل الأتمتة؟</small><h2>خطوات التنفيذ بالترتيب</h2><p>تُنفذ الخطوة رقم 1 أولاً، ثم التي تحتها. سنطلب موافقتك دائمًا بشكل افتراضي.</p></div><span>{stepCountLabel(draft.actions.length)}</span></div>
             <div className="shortcut-stack">
               {draft.actions.map((action, index) => {
                 const meta = actionTypes.find((item) => item.id === action.type);
@@ -497,11 +538,29 @@ function AutomationAssistant({ account, financialSnapshot, bills, workflows, wor
   const [error, setError] = useState("");
   const [selectedReplies, setSelectedReplies] = useState([]);
   const [mode, setMode] = useState("text");
+  const messagesRef = useRef(null);
+  const inputRef = useRef(null);
 
-  useEffect(() => localStorage.setItem(AI_CONVERSATION_KEY, JSON.stringify(conversation)), [conversation]);
+  useEffect(() => { storeLocal(AI_CONVERSATION_KEY, conversation); }, [conversation]);
   useEffect(() => {
     if (open) setMode(initialMode || "text");
   }, [open, initialMode]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
+  useEffect(() => {
+    if (!open || mode !== "text") return;
+    inputRef.current?.focus();
+  }, [open, mode]);
+  useEffect(() => {
+    const element = messagesRef.current;
+    if (element) element.scrollTop = element.scrollHeight;
+  }, [conversation.messages, busy]);
   useEffect(() => {
     const currentWorkflow = workflows.find((workflow) => workflow.id === `ai-${conversation.conversation_id}`);
     if (!currentWorkflow || currentWorkflow === conversation.state?.draft) return;
@@ -526,7 +585,7 @@ function AutomationAssistant({ account, financialSnapshot, bills, workflows, wor
     if (!message || busy) return;
     const userMessage = { id: `user-${Date.now()}`, role: "user", content: message };
     const recentMessages = [...conversation.messages, userMessage].map(({ role, content }) => ({ role, content }));
-    setConversation((current) => ({ ...current, messages: [...current.messages, userMessage], quick_replies: [], quick_reply_mode: "single" }));
+    setConversation((current) => ({ ...current, messages: [...current.messages, userMessage].slice(-80), quick_replies: [], quick_reply_mode: "single" }));
     setSelectedReplies([]);
     setInput("");
     setError("");
@@ -556,12 +615,13 @@ function AutomationAssistant({ account, financialSnapshot, bills, workflows, wor
            current_metadata: workflowMetadata?.[conversation.state?.draft?.id] || null,
          }),
       });
-      const result = await response.json();
+      const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "تعذر تشغيل المساعد الآن");
+      if (!result.assistant_message) throw new Error("وصلت استجابة غير مكتملة. حاول إرسال الطلب مرة أخرى.");
       const assistantMessage = { id: `assistant-${Date.now()}`, role: "assistant", content: result.assistant_message };
       setConversation((current) => ({
         ...current,
-        messages: [...current.messages, assistantMessage],
+        messages: [...current.messages, assistantMessage].slice(-80),
         state: result.state,
         quick_replies: result.quick_replies || [],
         quick_reply_mode: result.quick_reply_mode || "single",
@@ -569,6 +629,7 @@ function AutomationAssistant({ account, financialSnapshot, bills, workflows, wor
       if (result.action === "create_draft" && result.automation) acceptDraft(result.automation, result.metadata);
     } catch (requestError) {
       setError(requestError.message);
+      setInput(message);
     } finally {
       setBusy(false);
     }
@@ -585,7 +646,7 @@ function AutomationAssistant({ account, financialSnapshot, bills, workflows, wor
       <button type="button" role="tab" aria-selected={mode === "voice"} className={mode === "voice" ? "is-active" : ""} onClick={() => setMode("voice")}><Mic /> تحدث مع AutoFlow</button>
     </div>
     {mode === "text" ? <>
-    <div className="automation-assistant__messages" aria-live="polite" role="log">
+    <div className="automation-assistant__messages" aria-live="polite" role="log" ref={messagesRef}>
       {conversation.messages.map((message) => <div key={message.id} className={`assistant-message assistant-message--${message.role}`}><span>{message.content}</span></div>)}
       {busy && <div className="assistant-message assistant-message--assistant assistant-message--loading"><i /><i /><i /><span>أجهز المسودة الآمنة…</span></div>}
     </div>
@@ -596,7 +657,7 @@ function AutomationAssistant({ account, financialSnapshot, bills, workflows, wor
     {draft && <div className="assistant-understanding"><div><Sparkles /><span><strong>ما فهمه المساعد</strong><small>{draft.conditions.map(conditionLabel).join("، ")} ← {draft.actions.map(actionSummary).join("، ")}</small></span></div><button type="button" onClick={() => openDraft(draft.id)}>فتح المسودة في المحرر <ChevronLeft /></button></div>}
     {error && <div className="assistant-error" role="alert"><AlertTriangle /><span>{error}</span></div>}
     <form onSubmit={(event) => { event.preventDefault(); submitMessage(input); }}>
-      <input value={input} onChange={(event) => setInput(event.target.value)} disabled={busy} maxLength={2000} placeholder="مثال: إذا نزل راتبي حوّل 10% إلى الادخار" aria-label="وصف الأتمتة" />
+      <input ref={inputRef} value={input} onChange={(event) => setInput(event.target.value)} disabled={busy} maxLength={2000} placeholder="مثال: إذا نزل راتبي حوّل 10% إلى الادخار" aria-label="وصف الأتمتة" />
       <button type="submit" disabled={busy || !input.trim()} aria-label="إرسال"><Send /></button>
     </form>
     <footer><ShieldCheck /><span>ينشئ مسودة غير مفعلة فقط. النشر يتم يدويًا بعد المراجعة.</span></footer>
@@ -618,7 +679,7 @@ function AutomationAssistant({ account, financialSnapshot, bills, workflows, wor
 }
 
 export default function AutoFlowStudio({ announce, financialSnapshot, refreshFinancialData, updateFinancialSnapshot, connectLean, leanConnectBusy, beneficiaries, transfers, bills, createTransfer, addBill, payBills }) {
-  const [workflows, setWorkflows] = useState(() => loadList(WORKFLOWS_KEY, []).map(normalizeWorkflowShape));
+  const [workflows, setWorkflows] = useState(loadWorkflows);
   const [workflowMetadata, setWorkflowMetadata] = useState(() => loadObject(AI_METADATA_KEY, {}));
   const [history, setHistory] = useState(() => loadList(HISTORY_KEY, []));
   const [processed, setProcessed] = useState(() => loadList(PROCESSED_KEY, []));
@@ -636,34 +697,46 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
   const [assistantMode, setAssistantMode] = useState("text");
   const [advancedTarget, setAdvancedTarget] = useState(null);
   const [lastEvent, setLastEvent] = useState(null);
+  const [eventCount, setEventCount] = useState(0);
   const [publishTarget, setPublishTarget] = useState(null);
   const [publishBusy, setPublishBusy] = useState(false);
   const [publishError, setPublishError] = useState("");
   const currency = financialSnapshot?.account?.currency || "SAR";
   const rawBalance = Number(financialSnapshot?.account?.availableBalance ?? financialSnapshot?.account?.currentBalance ?? 0);
   const provider = financialSnapshot?.provider || { active: "plaid", status: financialSnapshot?.connected ? "connected" : "demo" };
-  const virtualOutflow = transfers.filter((item) => item.status === "completed" && !item.plaidRecorded).reduce((sum, item) => sum + item.amount, 0);
+  const today = dateKeyInTimezone();
+  const virtualTransferOutflow = transfers
+    .filter((item) => item.status === "completed" && !item.plaidRecorded)
+    .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const virtualBillOutflow = bills
+    .filter((bill) => bill.status === "paid"
+      && !bill.plaidRecorded
+      && bill.paidAt
+      && dateKeyInTimezone(bill.paidAt) === today)
+    .reduce((sum, bill) => sum + Number(bill.amount || 0), 0);
+  const virtualOutflow = virtualTransferOutflow + virtualBillOutflow;
   const balance = Math.max(0, rawBalance - virtualOutflow);
   const pendingApproval = approvalQueue[0] || null;
-  const today = new Date().toISOString().slice(0, 10);
-  const todayTransfers = transfers.filter((item) => item.date === today && item.status === "completed").reduce((sum, item) => sum + item.amount, 0);
+  const todayTransfers = transfers.filter((item) => item.date === today && item.status === "completed").reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
-  useEffect(() => localStorage.setItem(WORKFLOWS_KEY, JSON.stringify(workflows)), [workflows]);
-  useEffect(() => localStorage.setItem(AI_METADATA_KEY, JSON.stringify(workflowMetadata)), [workflowMetadata]);
-  useEffect(() => localStorage.setItem(HISTORY_KEY, JSON.stringify(history)), [history]);
-  useEffect(() => localStorage.setItem(PROCESSED_KEY, JSON.stringify(processed.slice(-300))), [processed]);
+  useEffect(() => { storeLocal(WORKFLOWS_KEY, workflows); }, [workflows]);
+  useEffect(() => { storeLocal(AI_METADATA_KEY, workflowMetadata); }, [workflowMetadata]);
+  useEffect(() => { storeLocal(HISTORY_KEY, history); }, [history]);
+  useEffect(() => { storeLocal(PROCESSED_KEY, processed.slice(-300)); }, [processed]);
 
   const addHistory = (status, title, detail) => setHistory((items) => [{ id: `log-${Date.now()}-${Math.random()}`, status, title, detail, time: new Intl.DateTimeFormat("ar-SA", { hour: "numeric", minute: "2-digit" }).format(new Date()) }, ...items].slice(0, 60));
 
   const postSandbox = async (payload) => {
     const response = await fetch("/api/plaid-snapshot", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     if (!response.ok) throw new Error("Sandbox event failed");
-    const snapshot = await response.json();
+    const snapshot = await response.json().catch(() => null);
+    if (!snapshot?.account) throw new Error("Sandbox response was incomplete");
     if (provider.active === "plaid") updateFinancialSnapshot((current) => ({ ...snapshot, provider: current?.provider || provider }));
     return snapshot;
   };
 
   const recordSandboxAction = async (payload) => {
+    if (provider.active !== "plaid") return false;
     try {
       await postSandbox(payload);
       return true;
@@ -674,22 +747,25 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
   };
 
   const executeAction = async (run, action) => {
-    const amount = resolveActionAmount(action, run);
+    const amount = resolveExecutionAmount(action, run, bills);
     if (["save", "internal-transfer", "beneficiary-transfer", "split"].includes(action.type)) {
-      const beneficiary = beneficiaries.find((item) => item.id === action.beneficiaryId) || beneficiaries[0];
+      if (!Number.isFinite(amount) || amount <= 0) throw new Error("مبلغ التحويل غير صالح");
+      const beneficiary = action.type === "save"
+        ? beneficiaries.find((item) => item.kind === "internal")
+        : beneficiaries.find((item) => item.id === action.beneficiaryId);
+      if (!beneficiary) throw new Error("تعذر العثور على الحساب أو المستفيد المحدد");
       const plaidRecorded = await recordSandboxAction({ action: "record-execution", amount, currency, description: `AutoFlow - ${beneficiary.name}` });
       createTransfer({ id: `transfer-${Date.now()}`, workflowId: run.workflowId, beneficiaryId: beneficiary.id, beneficiaryName: beneficiary.name, amount, currency, date: today, status: "completed", plaidRecorded, note: run.workflowTitle });
       addHistory("success", "تم التحويل افتراضيًا", `${formatMoney(amount, currency)} إلى ${beneficiary.name}`);
     } else if (action.type === "pay-bills") {
       const targetId = action.message || "all";
-      const due = bills.filter((bill) => bill.status === "due" && (targetId === "all" || bill.serviceId === targetId));
-      if (run.primaryFact?.bill && (targetId === "all" || run.primaryFact.bill.serviceId === targetId) && !due.some((bill) => bill.id === run.primaryFact.bill.id)) due.push(run.primaryFact.bill);
-      const total = due.reduce((sum, bill) => sum + bill.amount, 0);
+      const due = dueBillsForAction(action, bills, run.primaryFact);
+      const total = due.reduce((sum, bill) => sum + Number(bill.amount || 0), 0);
       const targetLabel = BILL_PAYMENT_TARGETS.find((target) => target.id === targetId)?.label || "المستحقات";
       if (!due.length) addHistory("skipped", "لا توجد مستحقات", `${run.workflowTitle} لم يجد مستحقًا لـ ${targetLabel}`);
       else {
-        payBills(due.map((bill) => bill.id));
-        await recordSandboxAction({ action: "record-execution", amount: total, currency, description: `AutoFlow - ${targetLabel}` });
+        const plaidRecorded = await recordSandboxAction({ action: "record-execution", amount: total, currency, description: `AutoFlow - ${targetLabel}` });
+        payBills(due.map((bill) => bill.id), { plaidRecorded });
         addHistory("success", "تم السداد افتراضيًا", `${targetLabel} · ${formatMoney(total, currency)}`);
       }
     } else if (action.type === "notify") addHistory("success", "تم إرسال إشعار", action.message);
@@ -697,11 +773,21 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
     else if (action.type === "pause") addHistory("success", "تم تعليق الأتمتات الاختيارية", run.workflowTitle);
   };
 
-  const continueRun = async (run, startIndex = 0) => {
+  const continueRun = async (run, startIndex = 0, segmentOutflow = 0) => {
+    let projectedOutflow = segmentOutflow;
     for (let index = startIndex; index < run.actions.length; index += 1) {
       const action = run.actions[index];
-      const amount = resolveActionAmount(action, run);
-      const failures = evaluateSafety(action, amount, { balance, todayTransfers });
+      const amount = resolveExecutionAmount(action, run, bills);
+      if (action.type === "pay-bills" && amount <= 0) {
+        await executeAction(run, action);
+        continue;
+      }
+      const failures = evaluateSafety(action, amount, {
+        balance: Math.max(0, balance - projectedOutflow),
+        todayTransfers: todayTransfers + projectedOutflow,
+        timezone: "Asia/Riyadh",
+        now: new Date(),
+      });
       if (failures.length) {
         addHistory("blocked", "منع شرط الأمان الإجراء", `${actionLabel(action)} · ${failures.join("، ")}`);
         continue;
@@ -709,21 +795,32 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
       if (actionNeedsApproval(action, amount)) {
         setApprovalQueue((queue) => [...queue, { id: `approval-${Date.now()}-${index}`, run, action, actionIndex: index, amount }]);
         addHistory("approval", "بانتظار الموافقة", `${run.workflowTitle} · ${actionLabel(action)}`);
-        return;
+        return "pending";
       }
-      await executeAction(run, action);
+      try {
+        await executeAction(run, action);
+        if (amount > 0 && ["save", "internal-transfer", "beneficiary-transfer", "split", "pay-bills"].includes(action.type)) {
+          projectedOutflow += amount;
+        }
+      } catch (error) {
+        addHistory("blocked", "تعذر تنفيذ الخطوة", `${actionLabel(action)} · ${error.message || "خطأ غير متوقع"}`);
+        return "blocked";
+      }
     }
     setWorkflows((items) => items.map((item) => item.id === run.workflowId ? { ...item, runs: (item.runs || 0) + 1, lastRunAt: new Date().toISOString() } : item));
+    return "completed";
   };
 
   const runMatchingWorkflows = async (facts, options = {}) => {
     const context = { balance, todayTransfers, now: options.now || new Date() };
-    const matches = workflows.map((workflow) => evaluateWorkflow(workflow, facts, context, processed)).filter(Boolean);
+    const executableWorkflows = workflows.filter((workflow) => validateAutomation(workflow, { source: "manual", beneficiaries }).length === 0);
+    const matches = executableWorkflows.map((workflow) => evaluateWorkflow(workflow, facts, context, processed)).filter(Boolean);
     if (!matches.length && !options.silent) addHistory("idle", "لم ترتبط أتمتة بالحدث", "يمكنك إنشاء اختصار جديد لهذا الحدث");
     for (const run of matches) {
       setProcessed((keys) => [...new Set([...keys, run.signature])].slice(-300));
       addHistory("detected", "تم تفعيل الأتمتة", `${run.workflowTitle} · ${run.primaryFact.label}`);
-      await continueRun(run, 0);
+      const status = await continueRun(run, 0);
+      if (status === "pending") break;
     }
     return matches.length;
   };
@@ -731,7 +828,9 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
   useEffect(() => {
     let running = false;
     const checkSchedules = async () => {
-      if (running || !workflows.some((workflow) => workflow.active && workflow.conditions.some((condition) => condition.type === "scheduled"))) return;
+      if (running
+        || !financialSnapshot?.account
+        || !workflows.some((workflow) => workflow.active && workflow.conditions.some((condition) => condition.type === "scheduled"))) return;
       running = true;
       try {
         await runMatchingWorkflows(eventFacts, { silent: true, now: new Date() });
@@ -742,23 +841,25 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
     checkSchedules();
     const timer = window.setInterval(checkSchedules, 30_000);
     return () => window.clearInterval(timer);
-  }, [workflows, processed, balance, todayTransfers, eventFacts]);
+  }, [workflows, processed, balance, todayTransfers, eventFacts, financialSnapshot?.account]);
 
   const fireEvent = async (eventMeta) => {
     setBusyEvent(eventMeta.id);
-    const bill = eventMeta.id === "bill-due" ? { id: `bill-${Date.now()}`, serviceId: "electricity", name: "فاتورة الكهرباء", amount: eventMeta.amount, currency, dueDate: today, status: "due", source: "بيئة AutoFlow التجريبية" } : null;
-    const event = { id: `event-${eventMeta.id}-${Date.now()}`, type: eventMeta.id, amount: eventMeta.amount, merchant: eventMeta.description, label: eventMeta.label, bill, createdAt: new Date().toISOString() };
+    const triggerType = eventMeta.triggerType || eventMeta.id;
+    const bill = triggerType === "bill-due" ? { id: `bill-${Date.now()}`, serviceId: "electricity", name: "فاتورة الكهرباء", amount: eventMeta.amount, currency, dueDate: today, status: "due", source: "بيئة AutoFlow التجريبية" } : null;
+    const event = { id: `event-${eventMeta.id}-${Date.now()}`, type: triggerType, amount: eventMeta.amount, merchant: eventMeta.description, label: eventMeta.label, bill, createdAt: new Date().toISOString() };
     try {
-      if (!eventMeta.localOnly) {
+      if (!eventMeta.localOnly && provider.active === "plaid") {
         try {
-          await postSandbox({ action: eventMeta.id === "salary" ? "inject-salary" : "inject-event", direction: eventMeta.direction, amount: eventMeta.amount, currency, description: `${eventMeta.description} ${Date.now()}` });
+          await postSandbox({ action: triggerType === "salary" ? "inject-salary" : "inject-event", direction: eventMeta.direction, amount: eventMeta.amount, currency, description: `${eventMeta.description} ${Date.now()}` });
         } catch {
           addHistory("warning", "الحدث يعمل محليًا", `${eventMeta.label} لم يُسجل في مزود البيانات هذه المرة`);
         }
       }
       if (bill) addBill(bill);
-      const facts = { ...eventFacts, [eventMeta.id]: event };
+      const facts = { ...eventFacts, [triggerType]: event };
       setEventFacts(facts);
+      setEventCount((count) => count + 1);
       addHistory("event", "تم تشغيل حدث", `${eventMeta.label} · ${eventMeta.amount ? formatMoney(eventMeta.amount, currency) : "بدون مبلغ"}`);
       const matchedCount = await runMatchingWorkflows(facts);
       setLastEvent({ label: eventMeta.label, matchedCount });
@@ -773,14 +874,24 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
   const approve = async () => {
     if (!pendingApproval) return;
     setApprovalQueue((queue) => queue.slice(1));
-    await executeAction(pendingApproval.run, pendingApproval.action);
-    await continueRun(pendingApproval.run, pendingApproval.actionIndex + 1);
-    announce("تمت الموافقة وتنفيذ البلوكات التالية");
+    try {
+      await executeAction(pendingApproval.run, pendingApproval.action);
+      const approvedOutflow = pendingApproval.amount > 0
+        && ["save", "internal-transfer", "beneficiary-transfer", "split", "pay-bills"].includes(pendingApproval.action.type)
+        ? pendingApproval.amount
+        : 0;
+      const status = await continueRun(pendingApproval.run, pendingApproval.actionIndex + 1, approvedOutflow);
+      if (status === "completed") await runMatchingWorkflows(eventFacts, { silent: true });
+      announce(status === "pending" ? "تمت الموافقة، والخطوة التالية تنتظر موافقتك" : "تمت الموافقة وتنفيذ الخطوات التالية");
+    } catch (error) {
+      addHistory("blocked", "تعذر تنفيذ الخطوة بعد الموافقة", error.message || "خطأ غير متوقع");
+      announce("تعذر تنفيذ الخطوة، ولم تُنفذ الخطوات التالية");
+    }
   };
 
   const reject = () => {
     if (!pendingApproval) return;
-    addHistory("rejected", "رُفض الإجراء", `${pendingApproval.run.workflowTitle} · ${actionLabel(pendingApproval.action)}`);
+    addHistory("rejected", "رُفض الإجراء وتوقفت بقية الخطوات", `${pendingApproval.run.workflowTitle} · ${actionLabel(pendingApproval.action)}`);
     setApprovalQueue((queue) => queue.slice(1));
   };
 
@@ -796,7 +907,7 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
     }
     setWorkflows((items) => upsertWorkflow(items, workflow));
     setEditor(null);
-    announce("تم حفظ الاختصار وتفعيله");
+    announce(workflow.active ? "تم حفظ الأتمتة وهي مفعلة" : "تم حفظ الأتمتة وهي متوقفة");
   };
 
   const saveAiDraft = (workflow, serverMetadata = null, options = {}) => {
@@ -837,8 +948,9 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
           metadata: workflowMetadata[publishTarget.id] || createAiMetadata(),
         }),
       });
-      const result = await response.json();
+      const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "لم تجتز المسودة تحقق النشر");
+      if (!result.automation || !result.metadata) throw new Error("وصلت استجابة نشر غير مكتملة");
       setWorkflows((items) => upsertWorkflow(items, result.automation));
       setWorkflowMetadata((items) => ({ ...items, [publishTarget.id]: result.metadata }));
       setPublishTarget(null);
@@ -871,9 +983,11 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
     setAssistantOpen(true);
   };
 
-  const eventCount = useMemo(() => Object.keys(eventFacts).length, [eventFacts]);
   const primaryEvents = eventTypes.filter((event) => event.primary);
-  const additionalEvents = eventTypes.filter((event) => !event.primary && !event.hiddenFromConsole);
+  const additionalEvents = [
+    ...subscriptionTestEvents,
+    ...eventTypes.filter((event) => !event.primary && !event.hiddenFromConsole),
+  ];
   const workflowCategories = useMemo(() => Object.entries(workflows.reduce((counts, item) => {
     const category = item.category || "شخصية";
     counts[category] = (counts[category] || 0) + 1;
@@ -940,7 +1054,7 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
           {needsReview && <div className="ai-review-badge"><Sparkles /> تحتاج إلى مراجعة</div>}
           <div className="shortcut-card__top">
             <span className="shortcut-card__icon"><AutomationIcon iconId={workflow.icon} /></span>
-            <div><strong>{workflow.name}</strong><small>{workflow.category || "شخصية"} · {workflow.conditions.length + workflow.actions.length} خطوات</small></div>
+            <div><strong>{workflow.name}</strong><small>{workflow.category || "شخصية"} · {stepCountLabel(workflow.conditions.length + workflow.actions.length)}</small></div>
             <div className="shortcut-card__controls">
               <button className="shortcut-card__advanced" type="button" onClick={() => setAdvancedTarget(workflow)} aria-label={`الخيارات المتقدمة لـ ${workflow.name}`} title="خيارات متقدمة"><Settings2 /></button>
               {needsReview
@@ -951,7 +1065,7 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
           <div className="shortcut-pipeline"><div><small>عندما</small>{workflow.conditions.map((condition) => <span key={condition.id}>{conditionLabel(condition)}</span>)}</div><ChevronLeft /><div><small>ينفّذ</small>{workflow.actions.map((action) => <span key={action.id}>{actionSummary(action)}</span>)}</div></div>
           <footer><span>{needsReview ? "غير مفعلة · راجعها قبل النشر" : workflow.runs ? `نُفذت ${workflow.runs} مرة` : "لم يصل حدث مطابق بعد"}</span><div><button type="button" onClick={() => setEditor(workflow)}><PencilLine /> تعديل</button><button className="shortcut-card__delete" type="button" onClick={() => setDeleteTarget(workflow)} aria-label={`حذف ${workflow.name}`} title="حذف الأتمتة"><Trash2 /></button></div></footer>
         </article>;
-      }) : <div className="shortcut-filter-empty"><ListChecks /><strong>لا توجد أتمتات ضمن «{categoryFilter}»</strong><span>اختر تصنيفًا آخر أو أنشئ أتمتة جديدة.</span></div>}
+      }) : <div className="shortcut-filter-empty"><ListChecks /><strong>لا توجد أتمتات ضمن «{categoryFilter}»</strong><span>اختر تصنيفًا آخر أو أنشئ أتمتة جديدة.</span><button type="button" onClick={newWorkflow}><Plus /> إنشاء أتمتة</button></div>}
       <section className="test-tools-disclosure">
         <button type="button" onClick={() => setShowTestTools((value) => !value)} aria-expanded={showTestTools}>
           <span><Zap /><span><strong>اختبار الأتمتات</strong><small>شغّل حدثًا تجريبيًا بأمان</small></span></span><ChevronDown />
@@ -986,7 +1100,7 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
     </div>
     <AutomationAssistant open={assistantOpen} initialMode={assistantMode} onClose={() => setAssistantOpen(false)} account={financialSnapshot?.account} financialSnapshot={financialSnapshot} bills={bills} workflows={workflows} workflowMetadata={workflowMetadata} onDraft={saveAiDraft} openDraft={openDraftById} />
     {advancedTarget && <AdvancedWorkflowSettings workflow={advancedTarget} close={() => setAdvancedTarget(null)} save={saveAdvancedSettings} />}
-    {editor && <ShortcutEditor workflow={editor} beneficiaries={beneficiaries} account={financialSnapshot?.account} metadata={workflowMetadata[editor.id]} close={() => setEditor(null)} save={saveWorkflow} requestPublish={requestPublishFromEditor} />}
+    {editor && <ShortcutEditor workflow={editor} beneficiaries={beneficiaries} account={financialSnapshot?.account} metadata={workflowMetadata[editor.id]} isNew={!workflows.some((workflow) => workflow.id === editor.id)} close={() => setEditor(null)} save={saveWorkflow} requestPublish={requestPublishFromEditor} />}
     {deleteTarget && <div className="shortcut-delete-layer"><section role="dialog" aria-modal="true" aria-labelledby="delete-automation-title"><span className="shortcut-delete-layer__icon"><AlertTriangle /></span><small>حذف نهائي</small><h2 id="delete-automation-title">حذف «{deleteTarget.name}»؟</h2><p>سيتم حذف الأتمتة وكل إعداداتها من هذا الجهاز. لا يمكن التراجع عن هذا الإجراء.</p><div><button type="button" onClick={() => setDeleteTarget(null)}>إلغاء</button><button type="button" onClick={deleteWorkflow}><Trash2 /> حذف الأتمتة نهائيًا</button></div></section></div>}
     {pendingApproval && <div className="shortcut-approval-layer"><section role="dialog" aria-modal="true" aria-label="طلب موافقة على إجراء"><span><ShieldCheck /></span><small>طلب موافقة</small><h2>{pendingApproval.run.workflowTitle}</h2><p>{actionLabel(pendingApproval.action)}{pendingApproval.amount ? ` بقيمة ${formatMoney(pendingApproval.amount, currency)}` : ""}</p><div><button type="button" onClick={reject}>رفض</button><button type="button" onClick={approve}>موافقة ومتابعة</button></div></section></div>}
     {publishTarget && <div className="ai-publish-layer"><section role="dialog" aria-modal="true" aria-labelledby="ai-publish-title"><span className="ai-publish-layer__icon"><AlertTriangle /></span><small>تأكيد النشر اليدوي</small><h2 id="ai-publish-title">نشر «{publishTarget.name}»؟</h2><p>هذه الأتمتة تم إنشاؤها باستخدام الذكاء الاصطناعي، وقد تحتوي على أخطاء أو تنفذ إجراءات غير متوقعة.</p><p>يرجى مراجعة المحفزات والشروط والحسابات والمستفيدين والمبالغ وجميع خطوات الأتمتة قبل النشر.</p><p>هل أنت متأكد من رغبتك في نشرها؟</p>{publishError && <div className="assistant-error" role="alert"><AlertTriangle /><span>{publishError}</span></div>}<div><button type="button" onClick={() => { setPublishTarget(null); setPublishError(""); }} disabled={publishBusy}>العودة للمراجعة</button><button type="button" onClick={publishAiWorkflow} disabled={publishBusy}>{publishBusy ? "جارٍ التحقق…" : "نعم، راجعت الأتمتة وأرغب في نشرها"}</button></div></section></div>}

@@ -7,6 +7,17 @@ function compareAmount(amount, operator, value) {
 
 const WEEKDAY_FROM_SHORT = { Sun: "sun", Mon: "mon", Tue: "tue", Wed: "wed", Thu: "thu", Fri: "fri", Sat: "sat" };
 
+export function dateKeyInTimezone(now = new Date(), timezone = "Asia/Riyadh") {
+  const date = new Date(now);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
 function zonedClock(now, timezone) {
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone: timezone || "Asia/Riyadh",
@@ -102,12 +113,38 @@ export function resolveActionAmount(action, run) {
     : Number(action.value || 0);
 }
 
+export function dueBillsForAction(action, bills = [], primaryFact = null) {
+  if (action?.type !== "pay-bills") return [];
+  const targetId = action.message || "all";
+  const due = bills.filter((bill) => bill?.status === "due" && (targetId === "all" || bill.serviceId === targetId));
+  const eventBill = primaryFact?.bill;
+  if (eventBill?.status === "due"
+    && (targetId === "all" || eventBill.serviceId === targetId)
+    && !due.some((bill) => bill.id === eventBill.id)) {
+    due.push(eventBill);
+  }
+  return due;
+}
+
+export function resolveExecutionAmount(action, run, bills = []) {
+  if (action?.type === "pay-bills") {
+    return dueBillsForAction(action, bills, run?.primaryFact)
+      .reduce((sum, bill) => sum + Number(bill.amount || 0), 0);
+  }
+  return resolveActionAmount(action, run);
+}
+
 export function evaluateSafety(action, amount, context) {
   const failures = [];
   const safety = action.safety || {};
   const balance = Number(context.balance || 0);
   const todayTransfers = Number(context.todayTransfers || 0);
-  const hour = new Date().getHours();
+  const currentTime = new Date(context.now || new Date());
+  const hour = Number(new Intl.DateTimeFormat("en-US", {
+    timeZone: context.timezone || "Asia/Riyadh",
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).format(Number.isNaN(currentTime.getTime()) ? new Date() : currentTime));
 
   if (safety.minBalanceOn && balance - amount < Number(safety.minBalance || 0)) failures.push("الحد الأدنى للرصيد");
   if (safety.maxAmountOn && amount > Number(safety.maxAmount || 0)) failures.push("الحد الأعلى للعملية");
@@ -119,6 +156,6 @@ export function evaluateSafety(action, amount, context) {
 export function actionNeedsApproval(action, amount) {
   const approval = action.approval || { mode: "always" };
   if (approval.mode === "always") return true;
-  if (approval.mode === "above") return amount >= Number(approval.threshold || 0);
+  if (approval.mode === "above") return amount > Number(approval.threshold || 0);
   return false;
 }

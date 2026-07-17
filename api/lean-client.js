@@ -13,6 +13,7 @@ const LEAN_HOSTS = {
 
 let apiTokenCache = null;
 let customerIdCache = null;
+const REQUEST_TIMEOUT_MS = 15_000;
 
 function environmentConfig(env = process.env) {
   const environment = env.LEAN_ENV === "production" ? "production" : "sandbox";
@@ -47,6 +48,23 @@ async function parseResponse(response, fallback) {
   return payload;
 }
 
+async function fetchWithTimeout(fetchImpl, url, options, fallback) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetchImpl(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error.name === "AbortError") {
+      const timeoutError = new Error(fallback);
+      timeoutError.statusCode = 504;
+      throw timeoutError;
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function generateAccessToken(scope, { fetchImpl = fetch, env = process.env } = {}) {
   const config = environmentConfig(env);
   const body = new URLSearchParams({
@@ -55,11 +73,11 @@ async function generateAccessToken(scope, { fetchImpl = fetch, env = process.env
     grant_type: "client_credentials",
     scope,
   });
-  const response = await fetchImpl(`${config.auth}/oauth2/token`, {
+  const response = await fetchWithTimeout(fetchImpl, `${config.auth}/oauth2/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
-  });
+  }, "استغرق إنشاء جلسة Lean وقتًا أطول من المتوقع");
   return parseResponse(response, "تعذر إنشاء جلسة Lean");
 }
 
@@ -79,10 +97,11 @@ async function leanApi(path, {
   token,
   fetchImpl = fetch,
   env = process.env,
-} = /** @type {{ method?: string, body?: any, token?: string, fetchImpl?: typeof fetch, env?: NodeJS.ProcessEnv }} */ ({})) {
+  retryAuth = true,
+} = /** @type {{ method?: string, body?: any, token?: string, fetchImpl?: typeof fetch, env?: NodeJS.ProcessEnv, retryAuth?: boolean }} */ ({})) {
   const config = environmentConfig(env);
   const accessToken = token || await getApiToken({ fetchImpl, env });
-  const response = await fetchImpl(`${config.api}${path}`, {
+  const response = await fetchWithTimeout(fetchImpl, `${config.api}${path}`, {
     method,
     headers: {
       Accept: "application/json",
@@ -90,7 +109,11 @@ async function leanApi(path, {
       ...(body ? { "Content-Type": "application/json" } : {}),
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
-  });
+  }, "استغرق الاتصال بخدمة Lean وقتًا أطول من المتوقع");
+  if (response.status === 401 && !token && retryAuth) {
+    apiTokenCache = null;
+    return leanApi(path, { method, body, fetchImpl, env, retryAuth: false });
+  }
   return parseResponse(response, "تعذر الاتصال بخدمة Lean");
 }
 
@@ -157,6 +180,12 @@ function numericAmount(value) {
   return Number.isFinite(number) ? Math.abs(number) : 0;
 }
 
+function signedAmount(value) {
+  const candidate = value?.value ?? value?.amount ?? value;
+  const number = Number(candidate || 0);
+  return Number.isFinite(number) ? number : 0;
+}
+
 function currencyOf(value, fallback = "SAR") {
   return String(value?.currency || value?.amount?.currency || fallback || "SAR").toUpperCase();
 }
@@ -173,7 +202,7 @@ function normalizeAccount(account) {
 function normalizeBalance(balance) {
   return {
     type: String(balance.type || balance.balance_type || "").toUpperCase(),
-    amount: numericAmount(balance.amount ?? balance),
+    amount: signedAmount(balance.amount ?? balance),
     currency: currencyOf(balance),
   };
 }
@@ -197,11 +226,12 @@ function normalizeTransaction(transaction, accountCurrency) {
 function normalizeBeneficiary(beneficiary) {
   const providerId = beneficiary.beneficiary_id || beneficiary.id || beneficiary.account_id;
   const account = beneficiary.iban || beneficiary.account_number || beneficiary.account?.iban || "";
+  const accountSuffix = String(account).slice(-4);
   return {
     id: `lean-${providerId}`,
     providerId,
-    name: beneficiary.name || beneficiary.beneficiary_name || beneficiary.account?.name || "مستفيد بنكي",
-    account: account ? `IBAN •• ${String(account).slice(-4)}` : "مستفيد من البنك المتصل",
+    name: beneficiary.name || beneficiary.beneficiary_name || beneficiary.account?.name || (accountSuffix ? `مستفيد •• ${accountSuffix}` : "مستفيد بنكي"),
+    account: account ? `IBAN •• ${accountSuffix}` : "مستفيد من البنك المتصل",
     kind: "beneficiary",
   };
 }

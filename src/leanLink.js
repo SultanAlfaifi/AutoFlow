@@ -7,13 +7,20 @@ export function loadLeanSdk(documentRef = document) {
   loaderPromise = new Promise((resolve, reject) => {
     const existing = documentRef.querySelector(`script[src="${LEAN_SDK_URL}"]`);
     const script = /** @type {HTMLScriptElement} */ (existing || documentRef.createElement("script"));
-    script.addEventListener("load", () => globalThis.Lean?.connect ? resolve(globalThis.Lean) : reject(new Error("لم يتم تحميل Lean LinkSDK")));
-    script.addEventListener("error", () => reject(new Error("تعذر تحميل واجهة ربط Lean")));
+    const finish = () => globalThis.Lean?.connect ? resolve(globalThis.Lean) : reject(new Error("لم يتم تحميل Lean LinkSDK"));
+    script.addEventListener("load", finish, { once: true });
+    script.addEventListener("error", () => reject(new Error("تعذر تحميل واجهة ربط Lean")), { once: true });
     if (!existing) {
       script.src = LEAN_SDK_URL;
       script.async = true;
       documentRef.head.appendChild(script);
+    } else if (script.dataset.loaded === "true") {
+      queueMicrotask(finish);
     }
+    script.addEventListener("load", () => { script.dataset.loaded = "true"; }, { once: true });
+  }).catch((error) => {
+    loaderPromise = null;
+    throw error;
   });
   return loaderPromise;
 }
@@ -22,6 +29,9 @@ export async function connectLeanAccount(session, {
   onResult,
 } = /** @type {{ onResult?: (result: any) => void }} */ ({})) {
   const Lean = await loadLeanSdk();
+  const redirectUrl = globalThis.location
+    ? `${globalThis.location.origin}${globalThis.location.pathname}`
+    : "";
   const result = await new Promise((resolve) => {
     Lean.connect({
       app_token: session.appToken,
@@ -32,8 +42,8 @@ export async function connectLeanAccount(session, {
       language: "ar",
       account_type: "PERSONAL",
       show_consent_explanation: true,
-      success_redirect_url: globalThis.location?.href || "",
-      fail_redirect_url: globalThis.location?.href || "",
+      success_redirect_url: redirectUrl,
+      fail_redirect_url: redirectUrl,
       customization: {
         theme_color: "#007087",
         button_text_color: "#ffffff",

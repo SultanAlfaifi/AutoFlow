@@ -121,8 +121,9 @@ export function useRealtimeVoiceAssistant({ conversationId, draft, metadata, acc
           current_metadata: metadataRef.current,
         }),
       });
-      const result = await response.json();
+      const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "استجابة المساعد لم تطابق بنية الأتمتة المطلوبة.");
+      if (!result.automation || !result.metadata) throw new Error("وصلت استجابة غير مكتملة من المساعد. حاول مرة أخرى.");
       if (generation !== generationRef.current) return;
       const changeSummary = summarizeDraftChanges(draftRef.current, result.automation);
       draftRef.current = result.automation;

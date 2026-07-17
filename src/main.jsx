@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import AutoFlowStudio from "./AutoFlowStudio.jsx";
 import { SANDBOX_BENEFICIARIES, SANDBOX_BILL_SERVICES } from "./automationContract.js";
@@ -73,6 +73,36 @@ function loadLocalList(key) {
   }
 }
 
+function storeLocalValue(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Storage can be unavailable in private or restricted browser contexts.
+  }
+}
+
+function currentClock() {
+  return new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(new Date());
+}
+
+function formatAccountBalance(account) {
+  const amount = Number(account?.availableBalance ?? account?.currentBalance ?? 12480.75);
+  const currency = account?.currency || "SAR";
+  return new Intl.NumberFormat("ar-SA", { style: "currency", currency, maximumFractionDigits: 2 }).format(amount);
+}
+
+function mergeBeneficiaries(providerBeneficiaries = []) {
+  const usableProviderBeneficiaries = (Array.isArray(providerBeneficiaries) ? providerBeneficiaries : [])
+    .filter((beneficiary) => beneficiary?.id
+      && beneficiary.name
+      && (beneficiary.name !== "مستفيد بنكي" || beneficiary.account !== "مستفيد من البنك المتصل"));
+  const merged = [...SANDBOX_BENEFICIARIES, ...usableProviderBeneficiaries];
+  return merged.filter((beneficiary, index) => {
+    const identity = `${beneficiary.id}|${beneficiary.name}|${beneficiary.account}`;
+    return merged.findIndex((candidate) => `${candidate.id}|${candidate.name}|${candidate.account}` === identity) === index;
+  });
+}
+
 function loadSandboxBills() {
   const existing = loadLocalList(BILLS_KEY);
   const now = new Date();
@@ -95,10 +125,10 @@ function loadSandboxBills() {
 }
 
 const quickActions = [
-  { label: "دفع\nالفواتير", icon: ReceiptText },
-  { label: "الحوالات\nالسريعة", icon: WalletCards },
-  { label: "شحن\nالجوال", icon: Smartphone },
-  { label: "المخالفات\nالمرورية", icon: Car },
+  { label: "دفع\nالفواتير", icon: ReceiptText, target: "payments" },
+  { label: "الحوالات\nالسريعة", icon: WalletCards, target: "transfers" },
+  { label: "شحن\nالجوال", icon: Smartphone, target: "payments" },
+  { label: "المخالفات\nالمرورية", icon: Car, target: "services" },
 ];
 
 const promos = [
@@ -106,21 +136,21 @@ const promos = [
     kicker: "جديد الإنماء",
     title: "خلّ مالك يمشي\nعلى خطتك",
     body: "أتمت التحويلات والفواتير والادخار من مكان واحد.",
-    cta: "اكتشف AutoFlow",
+    cta: "افتح AutoFlow",
     variant: "flow",
   },
   {
     kicker: "مساعد AutoFlow",
     title: "اكتب فكرتك…\nونرتبها بلوكات",
     body: "أنت تختار حساباتك وتراجع كل خطوة قبل التفعيل.",
-    cta: "جرّب المساعد",
+    cta: "افتح AutoFlow",
     variant: "ai",
   },
   {
     kicker: "معتمدة من الإنماء",
     title: "قوالب جاهزة\nلروتينك المالي",
     body: "ابدأ بقالب موثوق، ثم عدّل المبالغ والصلاحيات كما تريد.",
-    cta: "عرض القوالب",
+    cta: "ابدأ أتمتة",
     variant: "templates",
   },
 ];
@@ -184,7 +214,7 @@ const transferTypes = [
   },
 ];
 
-function TransfersScreen({ announce, beneficiaries = [], transfers = [] }) {
+function TransfersScreen({ announce, openAutoFlow, beneficiaries = [], transfers = [] }) {
   const [favoritesOpen, setFavoritesOpen] = useState(true);
 
   return (
@@ -219,7 +249,7 @@ function TransfersScreen({ announce, beneficiaries = [], transfers = [] }) {
         ))}
       </section>
 
-      {transfers.length > 0 && <section className="autoflow-transfer-history"><div className="autoflow-transfer-history__heading"><div><h2>حوالات AutoFlow</h2><span>تنفيذ افتراضي داخل البيئة التجريبية</span></div><History /></div>{transfers.map((transfer) => <div className="autoflow-transfer-row" key={transfer.id}><span className="autoflow-transfer-row__icon"><ArrowLeftRight /></span><div><strong>{transfer.beneficiaryName}</strong><small>{transfer.note} · {transfer.date}</small></div><div><b>- {new Intl.NumberFormat("ar-SA", { style: "currency", currency: transfer.currency || "USD" }).format(transfer.amount)}</b><small>مكتملة</small></div></div>)}</section>}
+      {transfers.length > 0 && <section className="autoflow-transfer-history"><div className="autoflow-transfer-history__heading"><div><h2>حوالات AutoFlow</h2><span>تنفيذ افتراضي داخل البيئة التجريبية</span></div><History /></div>{transfers.map((transfer) => <div className="autoflow-transfer-row" key={transfer.id}><span className="autoflow-transfer-row__icon"><ArrowLeftRight /></span><div><strong>{transfer.beneficiaryName}</strong><small>{transfer.note} · {transfer.date}</small></div><div><b>- {new Intl.NumberFormat("ar-SA", { style: "currency", currency: transfer.currency || "SAR" }).format(transfer.amount)}</b><small>مكتملة</small></div></div>)}</section>}
 
       <button className="quick-transfer-card" onClick={() => announce("الحوالة السريعة: أدخل الآيبان بدون إضافة مستفيد") }>
         <span className="quick-transfer-card__icon"><Zap /></span>
@@ -256,7 +286,7 @@ function TransfersScreen({ announce, beneficiaries = [], transfers = [] }) {
           <strong>أتمت حوالاتك المتكررة</strong>
           <p>حدد الموعد والمبلغ، واختر التنفيذ التلقائي أو بموافقتك.</p>
         </div>
-        <button onClick={() => announce("سيتم تحويلك إلى قالب الحوالات في AutoFlow") }>استخدم القالب</button>
+        <button onClick={openAutoFlow}>استخدم القالب</button>
       </section>
     </div>
   );
@@ -271,7 +301,7 @@ const paymentActions = [
   { title: "الفواتير الدورية", icon: Repeat2 },
 ];
 
-function PaymentsScreen({ announce, bills = [] }) {
+function PaymentsScreen({ announce, openAutoFlow, bills = [] }) {
   const [activeTab, setActiveTab] = useState("sadad");
   const tabs = [
     { id: "sadad", label: "سداد" },
@@ -304,14 +334,14 @@ function PaymentsScreen({ announce, bills = [] }) {
 
       <div className="payment-actions-grid">
         {paymentActions.map(({ title, icon: Icon }) => (
-          <button type="button" key={title} onClick={() => announce(title)}>
+          <button type="button" key={title} onClick={() => title === "الفواتير الدورية" ? openAutoFlow() : announce(title)}>
             <Icon />
             <strong>{title}</strong>
           </button>
         ))}
       </div>
 
-      {bills.length ? <section className="sandbox-bills"><header><div><h2>الفواتير والمستحقات</h2><span>أنشأتها أحداث البيئة التجريبية</span></div><ReceiptText /></header>{bills.map((bill) => <div className={`sandbox-bill ${bill.status === "paid" ? "is-paid" : "is-due"}`} key={bill.id}><span><FileText /></span><div><strong>{bill.name}</strong><small>الاستحقاق {bill.dueDate} · {bill.source}</small></div><div><b>{new Intl.NumberFormat("ar-SA", { style: "currency", currency: bill.currency || "USD" }).format(bill.amount)}</b><small>{bill.status === "paid" ? "مدفوعة" : "مستحقة"}</small></div></div>)}</section> : <section className="empty-bills-card">
+      {bills.length ? <section className="sandbox-bills"><header><div><h2>الفواتير والمستحقات</h2><span>أنشأتها أحداث البيئة التجريبية</span></div><ReceiptText /></header>{bills.map((bill) => <div className={`sandbox-bill ${bill.status === "paid" ? "is-paid" : "is-due"}`} key={bill.id}><span><FileText /></span><div><strong>{bill.name}</strong><small>الاستحقاق {bill.dueDate} · {bill.source}</small></div><div><b>{new Intl.NumberFormat("ar-SA", { style: "currency", currency: bill.currency || "SAR" }).format(bill.amount)}</b><small>{bill.status === "paid" ? "مدفوعة" : "مستحقة"}</small></div></div>)}</section> : <section className="empty-bills-card">
         <div><FileText /><span><strong>لا توجد فواتير</strong><small>أضف فواتيرك لعرض وسداد المستحقات.</small></span></div>
         <button type="button" onClick={() => announce("إضافة أول فاتورة") }><Plus /> أضف فاتورتك الأولى</button>
       </section>}
@@ -877,48 +907,43 @@ function AutomationWizard({ initialIdea, initialPreset, editingId, close, announ
 }
 
 function App() {
-  const [theme, setTheme] = useState(() => localStorage.getItem("autoflow-theme") || "light");
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem("autoflow-theme") || "light";
+    } catch {
+      return "light";
+    }
+  });
   const [balanceVisible, setBalanceVisible] = useState(false);
   const [promoIndex, setPromoIndex] = useState(0);
   const [activeNav, setActiveNav] = useState("home");
   const [toast, setToast] = useState("");
-  const [draftIdea, setDraftIdea] = useState("");
-  const [draftPreset, setDraftPreset] = useState(null);
-  const [draftEditingId, setDraftEditingId] = useState(null);
-  const [draftOpen, setDraftOpen] = useState(false);
+  const [time, setTime] = useState(currentClock);
   const [showAutoFlowHint, setShowAutoFlowHint] = useState(true);
   const [financialSnapshot, setFinancialSnapshot] = useState(null);
   const [leanConnectBusy, setLeanConnectBusy] = useState(false);
   const [transfers, setTransfers] = useState(() => loadLocalList(TRANSFERS_KEY));
   const [bills, setBills] = useState(loadSandboxBills);
   const financialDataLoaded = useRef(false);
-  const [automations, setAutomations] = useState([
-    {
-      id: "salary-flow",
-      title: "راتبي الذكي",
-      active: true,
-      runs: 3,
-      icon: BanknoteArrowDown,
-      config: { ...defaultWizardState, trigger: "salary", action: "save", value: "20", unit: "percent", safetyOn: false, approval: "approval", name: "راتبي الذكي" },
-    },
-    {
-      id: "bills-flow",
-      title: "فواتيري في موعدها",
-      active: false,
-      runs: 0,
-      icon: ReceiptText,
-      config: { ...defaultWizardState, trigger: "bill", action: "bill", value: "150", unit: "fixed", safetyOn: true, minimumBalance: "3000", approval: "approval", name: "فواتيري في موعدها" },
-    },
-  ]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#002d3f" : "#fbf8f5");
-    localStorage.setItem("autoflow-theme", theme);
+    try {
+      localStorage.setItem("autoflow-theme", theme);
+    } catch {
+      // Keep the selected theme for this session when persistence is blocked.
+    }
   }, [theme]);
 
   useEffect(() => {
+    if (globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return undefined;
     const timer = window.setInterval(() => setPromoIndex((current) => (current + 1) % promos.length), 5500);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setTime(currentClock()), 30_000);
     return () => window.clearInterval(timer);
   }, []);
 
@@ -928,8 +953,8 @@ function App() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
-  useEffect(() => localStorage.setItem(TRANSFERS_KEY, JSON.stringify(transfers)), [transfers]);
-  useEffect(() => localStorage.setItem(BILLS_KEY, JSON.stringify(bills)), [bills]);
+  useEffect(() => { storeLocalValue(TRANSFERS_KEY, transfers); }, [transfers]);
+  useEffect(() => { storeLocalValue(BILLS_KEY, bills); }, [bills]);
 
   useEffect(() => {
     const scrollArea = document.querySelector(".screen-scroll");
@@ -937,14 +962,22 @@ function App() {
   }, [activeNav]);
 
   const promo = promos[promoIndex];
-  const time = useMemo(() => new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(new Date()), []);
+  const homeAccount = financialSnapshot?.account;
+  const beneficiaries = mergeBeneficiaries(financialSnapshot?.beneficiaries);
 
   const announce = (message) => setToast(message);
+  const openAutoFlow = () => {
+    setActiveNav("autoflow");
+    setShowAutoFlowHint(false);
+    announce("تم فتح مركز AutoFlow");
+  };
   const refreshFinancialData = async () => {
     try {
       const response = await fetch("/api/financial-data");
       if (!response.ok) throw new Error("Financial data request failed");
-      setFinancialSnapshot(await response.json());
+      const snapshot = await response.json();
+      if (!snapshot?.account) throw new Error("Financial data response was incomplete");
+      setFinancialSnapshot(snapshot);
     } catch {
       announce("تعذر تحديث البيانات التجريبية الآن");
     }
@@ -961,7 +994,7 @@ function App() {
     setLeanConnectBusy(true);
     try {
       const response = await fetch("/api/lean-session", { method: "POST" });
-      const session = await response.json();
+      const session = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(session.error || "تعذر بدء ربط الحساب");
       const result = await connectLeanAccount(session);
       if (result.status === "SUCCESS") {
@@ -981,32 +1014,9 @@ function App() {
 
   const createTransfer = (transfer) => setTransfers((items) => [transfer, ...items].slice(0, 50));
   const addBill = (bill) => setBills((items) => [bill, ...items].slice(0, 50));
-  const payBills = (ids) => setBills((items) => items.map((bill) => ids.includes(bill.id) ? { ...bill, status: "paid", paidAt: new Date().toISOString() } : bill));
-  const openDraft = (idea, preset, editingId) => {
-    setDraftIdea(idea);
-    setDraftPreset(preset || null);
-    setDraftEditingId(editingId || null);
-    setDraftOpen(true);
-  };
-  const toggleAutomation = (id) => {
-    setAutomations((items) => items.map((item) => item.id === id ? { ...item, active: !item.active } : item));
-  };
-  const saveAutomation = (form, editingId) => {
-    if (editingId) {
-      setAutomations((items) => items.map((item) => item.id === editingId
-        ? { ...item, title: form.name, active: form.activeAfterSave, icon: triggerIcons[form.trigger], config: form }
-        : item));
-      return;
-    }
-    setAutomations((items) => [{
-      id: `flow-${Date.now()}`,
-      title: form.name,
-      active: form.activeAfterSave,
-      runs: 0,
-      icon: triggerIcons[form.trigger],
-      config: form,
-    }, ...items]);
-  };
+  const payBills = (ids, { plaidRecorded = false } = {}) => setBills((items) => items.map((bill) => ids.includes(bill.id)
+    ? { ...bill, status: "paid", paidAt: new Date().toISOString(), plaidRecorded }
+    : bill));
 
   return (
     <main className="stage">
@@ -1022,7 +1032,7 @@ function App() {
 
         <div className={`screen-scroll ${activeNav === "transfers" ? "screen-scroll--transfers" : ""} ${activeNav === "autoflow" ? "screen-scroll--autoflow" : ""} ${["payments", "store", "services"].includes(activeNav) ? "screen-scroll--bank-section" : ""}`}>
           {activeNav === "transfers" ? (
-            <TransfersScreen announce={announce} beneficiaries={SANDBOX_BENEFICIARIES} transfers={transfers} />
+            <TransfersScreen announce={announce} openAutoFlow={openAutoFlow} beneficiaries={beneficiaries} transfers={transfers} />
           ) : activeNav === "autoflow" ? (
             <AutoFlowStudio
               announce={announce}
@@ -1031,7 +1041,7 @@ function App() {
               updateFinancialSnapshot={setFinancialSnapshot}
               connectLean={connectLean}
               leanConnectBusy={leanConnectBusy}
-              beneficiaries={SANDBOX_BENEFICIARIES}
+              beneficiaries={beneficiaries}
               transfers={transfers}
               bills={bills}
               createTransfer={createTransfer}
@@ -1039,7 +1049,7 @@ function App() {
               payBills={payBills}
             />
           ) : activeNav === "payments" ? (
-            <PaymentsScreen announce={announce} bills={bills} />
+            <PaymentsScreen announce={announce} openAutoFlow={openAutoFlow} bills={bills} />
           ) : activeNav === "store" ? (
             <StoreScreen announce={announce} />
           ) : activeNav === "services" ? (
@@ -1067,9 +1077,9 @@ function App() {
           </header>
 
           <section className="account-summary">
-            <div className="account-name">حساب جاري 1000 <span>…</span></div>
+            <div className="account-name">{homeAccount?.name || "حساب جاري 1000"} <span>…</span></div>
             <button className="balance" onClick={() => setBalanceVisible((value) => !value)} aria-label="إظهار أو إخفاء الرصيد">
-              {balanceVisible ? <b>12,480.75 <small>ر.س</small></b> : <b>••••••••</b>}
+              {balanceVisible ? <b>{formatAccountBalance(homeAccount)}</b> : <b>••••••••</b>}
               {balanceVisible ? <EyeOff /> : <Eye />}
             </button>
             <span className="account-kind">جاري</span>
@@ -1081,7 +1091,7 @@ function App() {
               <span className="promo__kicker">{promo.kicker}</span>
               <h1>{promo.title.split("\n").map((line) => <React.Fragment key={line}>{line}<br /></React.Fragment>)}</h1>
               <p>{promo.body}</p>
-              <button onClick={() => { setActiveNav("autoflow"); announce("سيفتح مركز AutoFlow في القسم التالي"); }}>
+              <button onClick={openAutoFlow}>
                 {promo.cta}<ChevronLeft />
               </button>
             </div>
@@ -1095,15 +1105,15 @@ function App() {
           </div>
 
           <section className="quick-actions" aria-label="الإجراءات السريعة">
-            {quickActions.map(({ label, icon: Icon }) => (
-              <button key={label} onClick={() => announce(label.replace("\n", " "))}>
+            {quickActions.map(({ label, icon: Icon, target }) => (
+              <button key={label} onClick={() => { setActiveNav(target); announce(label.replace("\n", " ")); }}>
                 <span><Icon /></span>
                 {label.split("\n").map((line) => <React.Fragment key={line}>{line}<br /></React.Fragment>)}
               </button>
             ))}
           </section>
 
-          <section className="autoflow-teaser" onClick={() => { setActiveNav("autoflow"); announce("سنبني مركز AutoFlow بعد الواجهة الرئيسية"); }}>
+          <button type="button" className="autoflow-teaser" onClick={openAutoFlow}>
             <div className="autoflow-teaser__icon"><WandSparkles /></div>
             <div>
               <span>قالب مقترح لك</span>
@@ -1111,15 +1121,14 @@ function App() {
               <small>قالب معتمد • تحت تحكمك الكامل</small>
             </div>
             <ChevronLeft />
-          </section>
+          </button>
           </>
           )}
         </div>
 
         <nav className="bottom-nav" aria-label="التنقل الرئيسي">
           {navItems.map(({ id, label, icon: Icon, featured }) => (
-            <button key={id} className={`${activeNav === id ? "active" : ""} ${featured ? "featured" : ""}`} onClick={() => {
-              setDraftOpen(false);
+            <button key={id} aria-current={activeNav === id ? "page" : undefined} className={`${activeNav === id ? "active" : ""} ${featured ? "featured" : ""}`} onClick={() => {
               setActiveNav(id);
               if (id === "autoflow") setShowAutoFlowHint(false);
             }}>

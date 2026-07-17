@@ -44,7 +44,11 @@ body {
   color: var(--ink);
 }
 
-button { font: inherit; }
+button { font: inherit; touch-action: manipulation; }
+.phone button:focus-visible, .phone input:focus-visible, .phone select:focus-visible, .phone textarea:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--coral) 55%, transparent);
+  outline-offset: 2px;
+}
 
 .stage {
   min-height: 100vh;
@@ -166,7 +170,7 @@ button { font: inherit; }
 :root[data-theme="dark"] .quick-actions button span { background: var(--coral); color: #073449; }
 .quick-actions svg { width: 22px; stroke-width: 1.7; }
 
-.autoflow-teaser { min-height: 93px; padding: 15px; display: grid; grid-template-columns: 46px 1fr 18px; gap: 11px; align-items: center; border: 1px solid var(--line); border-radius: 22px; background: var(--card); cursor: pointer; }
+.autoflow-teaser { width: 100%; min-height: 93px; padding: 15px; display: grid; grid-template-columns: 46px 1fr 18px; gap: 11px; align-items: center; border: 1px solid var(--line); border-radius: 22px; color: var(--ink); background: var(--card); text-align: right; cursor: pointer; }
 .autoflow-teaser__icon { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 15px; color: #07374a; background: var(--coral); }
 .autoflow-teaser__icon svg { width: 23px; }
 .autoflow-teaser span, .autoflow-teaser small { display: block; color: var(--muted); font-size: 10px; }
@@ -595,4 +599,13 @@ button { font: inherit; }
 @media (max-height: 720px) {
   .account-summary { min-height: 145px; padding-top: 18px; }
   .promo { height: 185px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
 }

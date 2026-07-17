@@ -7,7 +7,7 @@
 🔗 **Live demo:** [auto-flow-ecru.vercel.app](https://auto-flow-ecru.vercel.app/)
 🎥 **Video walkthrough:** [How to use the prototype](https://www.youtube.com/shorts/ONA91pHLlJ0)
 
-An interactive prototype of the Alinma Bank app featuring a new capability called **AutoFlow**: a financial automation hub that turns a plain-language idea into a clear, step-by-step automation you can review and adjust, without the assistant ever seeing your banking data, and without executing anything until you grant permission.
+An interactive prototype of the Alinma Bank app featuring a new capability called **AutoFlow**: a financial automation hub that turns a plain-language idea into a clear, step-by-step automation you can review and adjust. The assistant receives only bounded, request-relevant context and cannot execute anything until you review and grant permission.
 
 Built for **Hackathon Amd** (Alinma Bank × Tuwaiq Academy).
 
@@ -27,13 +27,14 @@ Bank customers repeat the same financial actions every month: moving a percentag
 
 ##  Highlights
 
-- **Guided automation wizard**: a focused 5 step flow (Trigger → Action → Safety → Approval → Review)  one decision per screen instead of a crowded editor.
+- **Clear automation studio**: one prominent create button, simple event and execution blocks, and optional safety/approval controls kept under **Advanced options**.
 - **Ready-made templates**: Salary Routine, Smart Bills, Balance Guard, and Month-End Surplus   start from a trusted template and tweak it.
 - **Plain-language review**: every automation is summarized in one readable sentence before you save it, no jargon.
 - **Full customization**: name and color per automation, instant activate/deactivate, and a running count of executions.
+- **Bills and subscriptions**: trusted dropdowns and safe test scenarios for electricity, water, Xbox Game Pass, ChatGPT Plus, and Amazon Prime.
 - **AI draft assistant**: turns an Arabic request into the exact workflow JSON used by the visual editor, asks only for essential missing financial values, and always opens an inactive draft for review.
 - **Realtime voice assistant**: uses browser WebRTC for a low-latency Arabic conversation, supports interruption, shows a live transcript, and updates the same inactive draft used by text mode.
-- **Privacy first**: the assistant receives only the current account's safe ID, display name, type, currency, and the backend-controlled beneficiary options—never balances, credentials, or full account/card data.
+- **Privacy first**: the assistant receives only safe account metadata, backend-controlled destinations, and bounded request-relevant bill/transaction context—never credentials, card details, or the full banking dataset.
 - **A complete bank app around the feature**: Home, Transfers, Payments, Store, and Services screens, with light/dark mode and a fully right-to-left Arabic interface.
 
 ---
@@ -62,7 +63,7 @@ AI-generated workflows use the same object and arrays as the manual editor. Thei
 ##  Tech Stack
 
 - **React 19** + **Vite 8**, UI and build tooling
-- **lucide-react**,a icons
+- **lucide-react**, icons
 - **Plain CSS** (no styling framework), [`src/styles.css`](./src/styles.css)
 - **pnpm**  package management
 - **OpenAI Responses API**   server-side structured draft generation using strict JSON Schema

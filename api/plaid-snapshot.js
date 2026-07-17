@@ -6,6 +6,9 @@ const PLAID_HOSTS = {
 
 let sandboxAccessToken = null;
 const USD_TO_SAR = 3.75;
+const MAX_BODY_BYTES = 64 * 1024;
+const REQUEST_TIMEOUT_MS = 15_000;
+const SANDBOX_ACTIONS = new Set(["inject-salary", "inject-event", "record-execution"]);
 
 export function convertPlaidAmountToSar(amount, currency) {
   const numericAmount = Number(amount || 0);
@@ -48,17 +51,28 @@ export const demoSnapshot = {
 async function plaidRequest(path, body) {
   const environment = process.env.PLAID_ENV || "sandbox";
   const host = PLAID_HOSTS[environment] || PLAID_HOSTS.sandbox;
-  const response = await fetch(`${host}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      client_id: process.env.PLAID_CLIENT_ID,
-      secret: process.env.PLAID_SECRET,
-      ...body,
-    }),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let response;
+  try {
+    response = await fetch(`${host}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        client_id: process.env.PLAID_CLIENT_ID,
+        secret: process.env.PLAID_SECRET,
+        ...body,
+      }),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error.name === "AbortError") throw new Error("استغرق الاتصال ببيئة البيانات وقتًا أطول من المتوقع", { cause: error });
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 
-  const payload = await response.json();
+  const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(payload.error_message || payload.error_code || "تعذر الاتصال بـ Plaid");
   }
@@ -147,7 +161,7 @@ async function syncAllTransactions(accessToken) {
 
 export async function getPlaidSnapshot() {
   if (!process.env.PLAID_CLIENT_ID || !process.env.PLAID_SECRET) {
-    return demoSnapshot;
+    return { ...structuredClone(demoSnapshot), syncedAt: new Date().toISOString() };
   }
 
   const accessToken = await getSandboxAccessToken();
@@ -185,16 +199,37 @@ export async function getPlaidSnapshot() {
 async function readRequestBody(request) {
   if (request.body && typeof request.body === "object") return request.body;
   let raw = "";
-  for await (const chunk of request) raw += chunk;
+  for await (const chunk of request) {
+    raw += chunk;
+    if (Buffer.byteLength(raw) > MAX_BODY_BYTES) {
+      const error = new Error("حجم الطلب أكبر من الحد المسموح");
+      error.statusCode = 413;
+      throw error;
+    }
+  }
   return raw ? JSON.parse(raw) : {};
 }
 
 async function createSandboxEvent(payload) {
+  if (!payload || typeof payload !== "object" || !SANDBOX_ACTIONS.has(payload.action)) {
+    const error = new Error("نوع الحدث التجريبي غير صالح");
+    error.statusCode = 400;
+    throw error;
+  }
   const accessToken = await getSandboxAccessToken();
   const today = new Date().toISOString().slice(0, 10);
   const displayAmount = Math.abs(Number(payload.amount || 0));
-  if (!displayAmount || displayAmount > 1000000) throw new Error("قيمة المعاملة غير صالحة");
+  if (!displayAmount || displayAmount > 1000000) {
+    const error = new Error("قيمة المعاملة غير صالحة");
+    error.statusCode = 400;
+    throw error;
+  }
   const payloadCurrency = String(payload.currency || "SAR").toUpperCase();
+  if (!/^[A-Z]{3}$/.test(payloadCurrency)) {
+    const error = new Error("رمز العملة غير صالح");
+    error.statusCode = 400;
+    throw error;
+  }
   const amount = payloadCurrency === "SAR" ? Math.round((displayAmount / USD_TO_SAR) * 100) / 100 : displayAmount;
 
   const isIncome = payload.action === "inject-salary" || payload.direction === "inflow";
@@ -204,7 +239,7 @@ async function createSandboxEvent(payload) {
       amount: isIncome ? -amount : amount,
       date_posted: today,
       date_transacted: today,
-      description: payload.description || (isIncome ? "AutoFlow Payroll Deposit" : "AutoFlow Approved Action"),
+      description: String(payload.description || (isIncome ? "AutoFlow Payroll Deposit" : "AutoFlow Approved Action")).slice(0, 120),
       iso_currency_code: payloadCurrency === "SAR" ? "USD" : payloadCurrency,
     }],
   });
@@ -230,7 +265,7 @@ export default async function handler(request, response) {
     response.setHeader("Cache-Control", "no-store");
     response.end(JSON.stringify(snapshot));
   } catch (error) {
-    response.statusCode = 502;
+    response.statusCode = error.statusCode || 502;
     response.setHeader("Content-Type", "application/json");
     response.end(JSON.stringify({ error: error.message }));
   }

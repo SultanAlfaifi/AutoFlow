@@ -380,11 +380,23 @@ async function callOpenAI(requestBody, fetchImpl = fetch) {
       signal: controller.signal,
     });
     if (!response.ok) {
-      const error = new Error(`OpenAI request failed with status ${response.status}`);
+      const message = response.status === 429
+        ? "المساعد مشغول حاليًا. انتظر قليلًا ثم حاول مرة أخرى."
+        : [401, 403].includes(response.status)
+          ? "إعداد المساعد يحتاج إلى مراجعة من مسؤول النظام."
+          : "تعذر الوصول إلى المساعد الآن. حاول مرة أخرى.";
+      const error = new Error(message);
       error.statusCode = 502;
       throw error;
     }
     return response.json();
+  } catch (error) {
+    if (error.name === "AbortError") {
+      const timeoutError = new Error("استغرق المساعد وقتًا أطول من المتوقع. حاول مرة أخرى.");
+      timeoutError.statusCode = 504;
+      throw timeoutError;
+    }
+    throw error;
   } finally {
     clearTimeout(timer);
   }

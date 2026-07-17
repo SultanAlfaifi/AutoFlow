@@ -327,12 +327,12 @@ export function validateAutomation(automation, options = {}) {
   if (!Array.isArray(automation.conditions) || !automation.conditions.length) issues.push(issue("conditions", "required", "أضف حدث البدء"));
   if (!Array.isArray(automation.actions) || !automation.actions.length) issues.push(issue("actions", "required", "أضف خطوة تنفيذ واحدة على الأقل"));
 
+  if (!AUTOMATION_CATEGORIES.includes(automation.category)) issues.push(issue("category", "invalid_enum", "تصنيف غير مدعوم", "structure"));
+  if (!AUTOMATION_COLORS.includes(automation.color)) issues.push(issue("color", "invalid_enum", "لون غير مدعوم", "structure"));
+  if (!AUTOMATION_ICONS.includes(automation.icon)) issues.push(issue("icon", "invalid_enum", "أيقونة غير مدعومة", "structure"));
+  if (!MATCH_MODES.includes(automation.match)) issues.push(issue("match", "invalid_enum", "طريقة مطابقة غير مدعومة", "structure"));
   if (source === "ai") {
     if (automation.active !== false) issues.push(issue("active", "must_be_inactive", "يجب أن تبقى مسودة الذكاء الاصطناعي غير مفعلة", "security"));
-    if (!AUTOMATION_CATEGORIES.includes(automation.category)) issues.push(issue("category", "invalid_enum", "تصنيف غير مدعوم", "structure"));
-    if (!AUTOMATION_COLORS.includes(automation.color)) issues.push(issue("color", "invalid_enum", "لون غير مدعوم", "structure"));
-    if (!AUTOMATION_ICONS.includes(automation.icon)) issues.push(issue("icon", "invalid_enum", "أيقونة غير مدعومة", "structure"));
-    if (!MATCH_MODES.includes(automation.match)) issues.push(issue("match", "invalid_enum", "طريقة مطابقة غير مدعومة", "structure"));
     if (options.requireZeroRuns !== false && automation.runs !== 0) issues.push(issue("runs", "invalid_default", "المسودة الجديدة يجب ألا تحتوي على مرات تنفيذ", "security"));
   }
 
@@ -348,12 +348,10 @@ export function validateAutomation(automation, options = {}) {
     }
     if (!condition.type) issues.push(issue(`${path}.type`, "required", `اختر الحدث للشرط ${index + 1}`));
     else if (!TRIGGER_TYPES.includes(condition.type)) issues.push(issue(`${path}.type`, "invalid_enum", `المحفز ${condition.type} غير مدعوم`, "structure"));
-    if (source === "ai") {
-      if (!JOIN_TYPES.includes(condition.joinWith)) issues.push(issue(`${path}.joinWith`, "invalid_enum", "رابط الشروط غير مدعوم", "structure"));
-      if (!OPERATOR_TYPES.includes(condition.operator)) issues.push(issue(`${path}.operator`, "invalid_enum", "معامل الشرط غير مدعوم", "structure"));
-      if ((condition.type === "balance-below" || ["gte", "lte"].includes(condition.operator)) && !positiveNumber(condition.value)) {
-        issues.push(issue(`${path}.value`, "required_financial_value", "قيمة الشرط المالية مطلوبة وصحيحة"));
-      }
+    if (!JOIN_TYPES.includes(condition.joinWith)) issues.push(issue(`${path}.joinWith`, "invalid_enum", "رابط الشروط غير مدعوم", "structure"));
+    if (!OPERATOR_TYPES.includes(condition.operator)) issues.push(issue(`${path}.operator`, "invalid_enum", "معامل الشرط غير مدعوم", "structure"));
+    if ((condition.type === "balance-below" || ["gte", "lte"].includes(condition.operator)) && !positiveNumber(condition.value)) {
+      issues.push(issue(`${path}.value`, "required_financial_value", "قيمة الشرط المالية مطلوبة وصحيحة"));
     }
     if (condition.type === "scheduled") {
       const schedule = condition.schedule;
@@ -381,12 +379,11 @@ export function validateAutomation(automation, options = {}) {
     const explicitDestination = ["internal-transfer", "beneficiary-transfer", "split"].includes(action.type);
     if (explicitDestination && !action.beneficiaryId) issues.push(issue(`${path}.beneficiaryId`, "required_beneficiary", `${prefix}: اختر الحساب أو المستفيد`));
     if (transferAction && !positiveNumber(action.value)) issues.push(issue(`${path}.value`, "required_financial_value", `${prefix}: اكتب المبلغ أو النسبة`));
-    if (["notify", "categorize"].includes(action.type) && !action.message.trim()) issues.push(issue(`${path}.message`, "required", `${prefix}: اكتب النص`));
+    if (["notify", "categorize"].includes(action.type) && !String(action.message || "").trim()) issues.push(issue(`${path}.message`, "required", `${prefix}: اكتب النص`));
     if (action.type === "pay-bills" && !BILL_PAYMENT_TARGETS.some((target) => target.id === action.message)) issues.push(issue(`${path}.message`, "invalid_bill_target", `${prefix}: اختر الفاتورة أو الاشتراك المراد سداده`, "structure"));
     if (!action.approval.mode) issues.push(issue(`${path}.approval.mode`, "required", `${prefix}: اختر طريقة الموافقة`));
     if (action.approval.mode === "above" && !positiveNumber(action.approval.threshold)) issues.push(issue(`${path}.approval.threshold`, "required_financial_value", `${prefix}: اكتب مبلغ الموافقة`));
 
-    if (source !== "ai") return;
     if (!AMOUNT_MODES.includes(action.amountMode)) issues.push(issue(`${path}.amountMode`, "invalid_enum", "طريقة حساب المبلغ غير مدعومة", "structure"));
     if (!APPROVAL_MODES.includes(action.approval.mode)) issues.push(issue(`${path}.approval.mode`, "invalid_enum", "طريقة الموافقة غير مدعومة", "structure"));
     if (action.amountMode === "percent" && transferAction && Number(action.value) > 100) issues.push(issue(`${path}.value`, "invalid_percentage", "النسبة يجب ألا تتجاوز 100%"));
