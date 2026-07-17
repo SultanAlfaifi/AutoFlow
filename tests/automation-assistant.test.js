@@ -628,3 +628,13 @@ test("53. the app merges connected Lean beneficiaries without dropping trusted e
   assert.match(mainSource, /\[\.\.\.SANDBOX_BENEFICIARIES, \.\.\.usableProviderBeneficiaries\]/);
   assert.match(mainSource, /beneficiaries=\{beneficiaries\}/);
 });
+
+test("54. large phone viewports use the full screen without the desktop frame", async () => {
+  const styles = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
+  const shortcutStyles = await readFile(new URL("../src/shortcut.css", import.meta.url), "utf8");
+  assert.match(styles, /@media \(max-width: 600px\), \(max-height: 600px\) and \(pointer: coarse\)/);
+  assert.match(styles, /\.stage \{[\s\S]*?height: 100dvh;[\s\S]*?padding: 0;/);
+  assert.match(styles, /\.phone \{[\s\S]*?width: 100%;[\s\S]*?height: 100%;[\s\S]*?min-height: 0;[\s\S]*?border-radius: 0;/);
+  assert.match(styles, /env\(safe-area-inset-bottom\)/);
+  assert.match(shortcutStyles, /@media \(max-width: 600px\), \(max-height: 600px\) and \(pointer: coarse\)/);
+});

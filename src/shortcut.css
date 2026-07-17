@@ -823,9 +823,14 @@
 [data-theme="dark"] .financial-provider-card strong { color: #eaf3f4; }
 [data-theme="dark"] .create-automation-primary { color: #073b4b; }
 
-@media (max-width: 430px) {
-  .assistant-launcher { right: 12px; bottom: 86px; }
-  .automation-assistant--drawer { right: 8px; bottom: 80px; width: calc(100% - 16px); max-height: calc(100% - 92px); }
+@media (max-width: 600px), (max-height: 600px) and (pointer: coarse) {
+  .assistant-launcher { right: 12px; bottom: calc(86px + env(safe-area-inset-bottom)); }
+  .automation-assistant--drawer {
+    right: 8px;
+    bottom: calc(80px + env(safe-area-inset-bottom));
+    width: calc(100% - 16px);
+    max-height: calc(100% - 92px - env(safe-area-inset-bottom));
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
