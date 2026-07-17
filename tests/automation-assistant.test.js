@@ -656,6 +656,10 @@ test("56. voice draft and app navigation use touch scrolling and smooth transiti
   assert.match(mainSource, /className="screen-content" key=\{activeNav\}/);
   assert.match(styles, /\.screen-scroll\.is-exiting \.screen-content/);
   assert.match(styles, /@keyframes screen-enter/);
+  const screenContentRule = styles.match(/\.screen-content \{([^}]*)\}/)?.[1] || "";
+  const screenExitRule = styles.match(/\.screen-scroll\.is-exiting \.screen-content \{([^}]*)\}/)?.[1] || "";
+  assert.doesNotMatch(screenContentRule, /transform/);
+  assert.doesNotMatch(screenExitRule, /transform/);
   assert.match(shortcutStyles, /\.automation-assistant--drawer \.voice-assistant \{[^}]*flex: 1 1 auto;[^}]*min-height: 0;[^}]*overflow-y: auto;[^}]*touch-action: pan-y;/);
   assert.match(shortcutStyles, /\.assistant-drawer-layer\.is-closing \.automation-assistant--drawer/);
 });
