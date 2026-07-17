@@ -719,7 +719,7 @@ test("58. compound AI requests preserve every ordered action and explicit approv
     value: "10",
     beneficiaryId: "",
     message: "",
-    safety: { ...DEFAULT_SAFETY, minBalanceOn: true, minBalance: "5000" },
+    safety: { ...DEFAULT_SAFETY, balanceAboveOn: true, balanceAbove: "5000" },
   };
   const incomplete = {
     action: "create_draft",
@@ -750,7 +750,7 @@ test("58. compound AI requests preserve every ordered action and explicit approv
     assert.deepEqual(result.automation.actions.map((action) => action.type), ["pay-bills", "beneficiary-transfer", "save"]);
     assert.deepEqual(result.automation.actions.map((action) => action.approval.mode), ["always", "always", "always"]);
     assert.equal(result.automation.actions[1].beneficiaryId, "worker");
-    assert.equal(result.automation.actions[2].safety.minBalance, "5000");
+    assert.equal(result.automation.actions[2].safety.balanceAbove, "5000");
     assert.equal(result.automation.actions[2].amountMode, "balance-percent");
 
     const updateCapture = [];
@@ -771,4 +771,12 @@ test("59. balance-percent uses the projected balance remaining at its ordered st
   assert.equal(resolveExecutionAmount(action, run, [], 8500), 850);
   assert.equal(resolveExecutionAmount(action, run, [], 5000), 500);
   assert.deepEqual(validateAutomation(validDraft({ actions: [action] }), { source: "ai" }), []);
+  assert.deepEqual(evaluateSafety({
+    ...action,
+    safety: { ...action.safety, balanceAboveOn: true, balanceAbove: "5000" },
+  }, 500, { balance: 5000, todayTransfers: 0, now: "2026-07-17T09:00:00.000Z" }), ["شرط الرصيد المطلوب"]);
+  assert.deepEqual(evaluateSafety({
+    ...action,
+    safety: { ...action.safety, balanceAboveOn: true, balanceAbove: "5000" },
+  }, 510, { balance: 5100, todayTransfers: 0, now: "2026-07-17T09:00:00.000Z" }), []);
 });

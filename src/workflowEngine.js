@@ -149,6 +149,7 @@ export function evaluateSafety(action, amount, context) {
     hourCycle: "h23",
   }).format(Number.isNaN(currentTime.getTime()) ? new Date() : currentTime));
 
+  if (safety.balanceAboveOn && balance <= Number(safety.balanceAbove || 0)) failures.push("شرط الرصيد المطلوب");
   if (safety.minBalanceOn && balance - amount < Number(safety.minBalance || 0)) failures.push("الحد الأدنى للرصيد");
   if (safety.maxAmountOn && amount > Number(safety.maxAmount || 0)) failures.push("الحد الأعلى للعملية");
   if (safety.dailyLimitOn && todayTransfers + amount > Number(safety.dailyLimit || 0)) failures.push("حد التحويل اليومي");

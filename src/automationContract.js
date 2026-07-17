@@ -91,6 +91,8 @@ export function getActionDestinations(actionType, beneficiaries = SANDBOX_BENEFI
 }
 
 export const DEFAULT_SAFETY = Object.freeze({
+  balanceAboveOn: false,
+  balanceAbove: "",
   minBalanceOn: false,
   minBalance: "",
   maxAmountOn: false,
@@ -193,6 +195,8 @@ export const AUTOMATION_JSON_SCHEMA = Object.freeze({
             type: "object",
             additionalProperties: false,
             properties: {
+              balanceAboveOn: { type: "boolean" },
+              balanceAbove: { type: "string" },
               minBalanceOn: { type: "boolean" },
               minBalance: { type: "string" },
               maxAmountOn: { type: "boolean" },
@@ -203,7 +207,7 @@ export const AUTOMATION_JSON_SCHEMA = Object.freeze({
               startHour: { type: "string" },
               endHour: { type: "string" },
             },
-            required: ["minBalanceOn", "minBalance", "maxAmountOn", "maxAmount", "dailyLimitOn", "dailyLimit", "hoursOn", "startHour", "endHour"],
+            required: ["balanceAboveOn", "balanceAbove", "minBalanceOn", "minBalance", "maxAmountOn", "maxAmount", "dailyLimitOn", "dailyLimit", "hoursOn", "startHour", "endHour"],
           },
           approval: {
             type: "object",
@@ -283,7 +287,7 @@ const ROOT_KEYS = ["id", "name", "category", "color", "icon", "active", "match",
 const CONDITION_KEYS = ["id", "type", "joinWith", "operator", "value", "merchant", "schedule"];
 const SCHEDULE_KEYS = ["mode", "date", "time", "weekdays", "dayOfMonth", "timezone"];
 const ACTION_KEYS = ["id", "type", "amountMode", "value", "beneficiaryId", "message", "safety", "approval"];
-const SAFETY_KEYS = ["minBalanceOn", "minBalance", "maxAmountOn", "maxAmount", "dailyLimitOn", "dailyLimit", "hoursOn", "startHour", "endHour"];
+const SAFETY_KEYS = ["balanceAboveOn", "balanceAbove", "minBalanceOn", "minBalance", "maxAmountOn", "maxAmount", "dailyLimitOn", "dailyLimit", "hoursOn", "startHour", "endHour"];
 const APPROVAL_KEYS = ["mode", "threshold"];
 
 function isRecord(value) {
@@ -393,6 +397,7 @@ export function validateAutomation(automation, options = {}) {
     if (action.type === "beneficiary-transfer" && action.beneficiaryId && beneficiaryById.get(action.beneficiaryId)?.kind !== "beneficiary") issues.push(issue(`${path}.beneficiaryId`, "invalid_beneficiary", "الوجهة ليست مستفيدًا صالحًا", "security"));
 
     const safetyChecks = [
+      ["balanceAboveOn", "balanceAbove"],
       ["minBalanceOn", "minBalance"],
       ["maxAmountOn", "maxAmount"],
       ["dailyLimitOn", "dailyLimit"],
@@ -460,6 +465,7 @@ export function normalizeWorkflowShape(workflow) {
     actions: Array.isArray(workflow.actions) ? workflow.actions.map((action) => ({
       ...action,
       message: action?.type === "pay-bills" && !action.message ? "all" : action.message,
+      safety: { ...DEFAULT_SAFETY, ...(isRecord(action?.safety) ? action.safety : {}) },
     })) : workflow.actions,
   };
 }

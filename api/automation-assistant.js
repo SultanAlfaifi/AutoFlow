@@ -252,6 +252,7 @@ export function buildModelContext(payload) {
     },
     financial_safety_policy: {
       fixed_transfer: "enable maxAmountOn with maxAmount equal to the fixed action value",
+      ordered_balance_condition: "when an ordered action should run only if the remaining balance is above a user-supplied threshold, enable balanceAboveOn and put that exact threshold in balanceAbove",
       user_supplied_limits: "preserve and enable supported min balance, max amount, daily limit, or hours",
       unknown_limits: "leave disabled and do not invent or ask unless requested",
     },
@@ -293,8 +294,17 @@ export function requestedActionIntents(message) {
 }
 
 function validateRequestCompleteness(envelope, message, currentDraft = null) {
-  if (envelope?.action !== "create_draft" || !envelope.automation) return [];
   const expected = requestedActionIntents(message);
+  const balanceCondition = String(message).match(/(?:بقي|تبقى|الرصيد)[\s\S]{0,80}(?:أكثر|أعلى|فوق|يتجاوز)[^0-9]{0,20}([\d,]+)/iu);
+  if (envelope?.action === "unsupported_request" && expected.length > 1 && balanceCondition) {
+    return [{
+      path: "action",
+      code: "representable_compound_request_rejected",
+      message: "الطلب مدعوم: استخدم balance-percent للنسبة من الرصيد المتبقي وbalanceAboveOn/balanceAbove لشرط الرصيد قبل الخطوة.",
+      kind: "structure",
+    }];
+  }
+  if (envelope?.action !== "create_draft" || !envelope.automation) return [];
   if (currentDraft && expected.length <= 1) return [];
   const actual = envelope.automation.actions || [];
   const issues = [];
@@ -338,6 +348,18 @@ function validateRequestCompleteness(envelope, message, currentDraft = null) {
         message: "طلب المستخدم نسبة من الرصيد المتبقي عند هذه الخطوة؛ استخدم balance-percent بدل نسبة مبلغ الحدث.",
         kind: "structure",
       });
+    }
+    if (savingsIndex >= 0 && balanceCondition) {
+      const expectedThreshold = balanceCondition[1].replace(/,/g, "");
+      const safety = actual[savingsIndex]?.safety;
+      if (!safety?.balanceAboveOn || Number(safety.balanceAbove) !== Number(expectedThreshold)) {
+        issues.push({
+          path: `automation.actions[${savingsIndex}].safety.balanceAbove`,
+          code: "ordered_balance_condition_omitted",
+          message: `فعّل balanceAboveOn واجعل balanceAbove=${expectedThreshold} على خطوة الادخار.`,
+          kind: "structure",
+        });
+      }
     }
   }
   return issues;

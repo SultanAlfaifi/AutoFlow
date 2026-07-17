@@ -238,6 +238,7 @@ function actionSummary(action) {
 
 function actionSafetySummary(action) {
   const limits = [];
+  if (action.safety?.balanceAboveOn) limits.push(`يعمل إذا الرصيد أعلى من ${action.safety.balanceAbove} ريال`);
   if (action.safety?.minBalanceOn) limits.push(`أقل رصيد ${action.safety.minBalance} ريال`);
   if (action.safety?.maxAmountOn) limits.push(`أعلى تحويل ${action.safety.maxAmount} ريال`);
   if (action.safety?.dailyLimitOn) limits.push(`الحد اليومي ${action.safety.dailyLimit} ريال`);
@@ -461,6 +462,7 @@ function AdvancedWorkflowSettings({ workflow, close, save }) {
   }));
   const invalidAction = draft.actions.find((action) => {
     const positive = (value) => Number.isFinite(Number(value)) && Number(value) > 0;
+    if (action.safety.balanceAboveOn && !positive(action.safety.balanceAbove)) return true;
     if (action.safety.minBalanceOn && !positive(action.safety.minBalance)) return true;
     if (action.safety.maxAmountOn && !positive(action.safety.maxAmount)) return true;
     if (action.safety.dailyLimitOn && !positive(action.safety.dailyLimit)) return true;
@@ -485,6 +487,7 @@ function AdvancedWorkflowSettings({ workflow, close, save }) {
           <div className="advanced-settings__section">
             <div className="block-settings-title"><ShieldCheck /><div><strong>حدود الأمان</strong><small>فعّل فقط الحدود التي تحتاجها.</small></div></div>
             <div className="safety-grid">
+              <SafetySetting label="نفّذ إذا كان الرصيد أعلى من" help="تُتخطى هذه الخطوة إذا لم يتجاوز الرصيد المتبقي هذا المبلغ." checked={action.safety.balanceAboveOn} value={action.safety.balanceAbove} onToggle={(checked) => updateAction(action.id, { safety: { ...action.safety, balanceAboveOn: checked } })} onValue={(value) => updateAction(action.id, { safety: { ...action.safety, balanceAbove: value } })} />
               <SafetySetting label="اترك رصيدًا لا يقل عن" help="تُمنع الخطوة إذا أصبح الرصيد أقل من هذا المبلغ." checked={action.safety.minBalanceOn} value={action.safety.minBalance} onToggle={(checked) => updateAction(action.id, { safety: { ...action.safety, minBalanceOn: checked } })} onValue={(value) => updateAction(action.id, { safety: { ...action.safety, minBalance: value } })} />
               <SafetySetting label="ضع حدًا أعلى للعملية" help="لا تنفذ هذه الخطوة إذا تجاوزت المبلغ المحدد." checked={action.safety.maxAmountOn} value={action.safety.maxAmount} onToggle={(checked) => updateAction(action.id, { safety: { ...action.safety, maxAmountOn: checked } })} onValue={(value) => updateAction(action.id, { safety: { ...action.safety, maxAmount: value } })} />
               <SafetySetting label="ضع حدًا يوميًا" help="يمنع تجاوز إجمالي التحويلات لهذا الحد في اليوم." checked={action.safety.dailyLimitOn} value={action.safety.dailyLimit} onToggle={(checked) => updateAction(action.id, { safety: { ...action.safety, dailyLimitOn: checked } })} onValue={(value) => updateAction(action.id, { safety: { ...action.safety, dailyLimit: value } })} />
