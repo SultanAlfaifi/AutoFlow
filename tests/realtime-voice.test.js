@@ -179,7 +179,7 @@ test("microphone errors have safe Arabic messages", () => {
   assert.match(classifyVoiceError({ name: "NotReadableError" }), /تطبيق آخر/);
 });
 
-test("the VoiceAssistant component renders privacy, controls, transcript, and preview accessibly", async () => {
+test("the VoiceAssistant starts with one simple voice action and hides advanced sections", async () => {
   const server = await createServer({ root: fileURLToPath(new URL("..", import.meta.url)), server: { middlewareMode: true }, appType: "custom", logLevel: "silent" });
   try {
     const { default: VoiceAssistant } = await server.ssrLoadModule("/src/VoiceAssistant.jsx");
@@ -196,10 +196,11 @@ test("the VoiceAssistant component renders privacy, controls, transcript, and pr
       onReset() {},
     }));
     assert.match(html, /تحدث مع مساعد AutoFlow/);
-    assert.match(html, /لن يتم تنفيذ أي عملية مالية/);
+    assert.match(html, /ينشئ مسودة للمراجعة فقط/);
     assert.match(html, /aria-label="بدء المحادثة الصوتية"/);
-    assert.match(html, /aria-label="النص المفرغ للمحادثة"/);
-    assert.match(html, /معاينة مباشرة/);
+    assert.doesNotMatch(html, /aria-label="النص المفرغ للمحادثة"/);
+    assert.doesNotMatch(html, /معاينة مباشرة/);
+    assert.doesNotMatch(html, /OpenAI|API/);
   } finally {
     await server.close();
   }
