@@ -871,11 +871,11 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
   </button>;
 
   return <div className="shortcut-studio">
-    <header className="shortcut-studio__header"><div><span className="shortcut-logo"><Workflow /></span><div><h1>AutoFlow</h1><span><i /> جاهز للعمل</span></div></div><button type="button" onClick={newWorkflow}><Settings2 /> إنشاء يدوي</button></header>
+    <header className="shortcut-studio__header"><div><span className="shortcut-logo"><Workflow /></span><div><h1>AutoFlow</h1><span><i /> جاهز للعمل</span></div></div><button type="button" onClick={newWorkflow}><Plus /> أتمتة جديدة</button></header>
     <section className={`financial-provider-card financial-provider-card--${provider.status}`} aria-label="مصدر البيانات المالية">
       <span><Landmark /></span>
       <div>
-        <small>مصدر البيانات</small>
+        <small>{provider.status === "connected" ? "الحساب البنكي" : "مصدر البيانات"}</small>
         <strong>{provider.active === "lean" ? "Lean السعودية" : "بيانات تجريبية"}</strong>
         <p>{provider.status === "connected" && provider.active === "lean"
           ? "حسابك متصل بموافقتك عبر الخدمات المصرفية المفتوحة."
@@ -900,57 +900,15 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
       <button type="button" onClick={() => openAssistant("text")}><MessageCircle /> تحدث مع المساعد</button>
       <button className="automation-empty-state__manual" type="button" onClick={newWorkflow}>أو أنشئها يدويًا</button>
     </section> : <>
-    <section className="autoflow-simple-summary" aria-label="ملخص الأتمتات">
-      <div><small>أتمتاتك</small><strong>{workflows.length}</strong></div>
-      <i />
-      <div><small>تعمل الآن</small><strong>{workflows.filter((item) => item.active).length}</strong></div>
-      <i />
-      <div><small>تحتاج مراجعة</small><strong>{workflows.filter((item) => requiresAiReview(workflowMetadata[item.id])).length}</strong></div>
-    </section>
-    <section className="test-tools-disclosure">
-      <button type="button" onClick={() => setShowTestTools((value) => !value)} aria-expanded={showTestTools}>
-        <span><Zap /><span><strong>تجربة الأتمتات</strong><small>شغّل أحداثًا افتراضية للتأكد من عملها</small></span></span><ChevronDown />
-      </button>
-    {showTestTools && <>
-    <section className="event-console">
-      <div className="event-console__heading">
-        <span className="event-console__step">1</span>
-        <div><small>جرّب الأتمتة</small><h2>ما الذي حدث في الحساب؟</h2><p>اختر حدثاً واحداً. سيبحث AutoFlow عن الأتمتات المرتبطة به وينفذ خطواتها بالترتيب.</p></div>
-        <button type="button" onClick={refreshFinancialData} aria-label="تحديث بيانات الحساب" title="جلب أحدث بيانات الحساب"><Repeat2 /></button>
-      </div>
-
-      <div className="event-console__notice"><ShieldCheck /><span><strong>هذه تجربة آمنة</strong><small>الأحداث والأموال هنا افتراضية ولا تحرك أموالاً حقيقية.</small></span></div>
-
-      <div className="event-grid">{primaryEvents.map(renderEventButton)}</div>
-
-      <button className={`event-more-toggle ${showMoreEvents ? "is-open" : ""}`} type="button" onClick={() => setShowMoreEvents((value) => !value)} aria-expanded={showMoreEvents}>
-        <span><strong>أحداث أخرى</strong><small>اشتراك، انخفاض الرصيد، ونهاية الشهر</small></span><ChevronDown />
-      </button>
-      {showMoreEvents && <div className="event-grid event-grid--additional">{additionalEvents.map(renderEventButton)}</div>}
-
-      {lastEvent && <div className={`event-result ${lastEvent.matchedCount ? "is-success" : "is-neutral"}`}>
-        <CheckCircle2 />
-        <span><strong>تمت محاكاة: {lastEvent.label}</strong><small>{lastEvent.matchedCount ? `تم تشغيل ${lastEvent.matchedCount} من الأتمتات المرتبطة. راجع النتيجة في سجل التنفيذ.` : "لا توجد أتمتة مرتبطة بهذا الحدث حالياً. يمكنك إنشاء أتمتة جديدة له."}</small></span>
-      </div>}
-
-      <div className="event-account-summary">
-        <span><Landmark /><small>رصيد الحساب التجريبي</small><strong>{formatMoney(balance, currency)}</strong></span>
-        <span><Zap /><small>أحداث جربتها</small><strong>{eventCount}</strong></span>
-        {approvalQueue.length > 0 && <span className="needs-attention"><ShieldCheck /><small>بانتظار موافقتك</small><strong>{approvalQueue.length}</strong></span>}
-      </div>
-    </section>
-    </>}
-    </section>
-
     <div className="shortcut-tabs" role="tablist"><button role="tab" aria-selected={activeTab === "flows"} className={activeTab === "flows" ? "is-active" : ""} onClick={() => setActiveTab("flows")}>أتمتاتي</button><button role="tab" aria-selected={activeTab === "history"} className={activeTab === "history" ? "is-active" : ""} onClick={() => setActiveTab("history")}>ما الذي تم تنفيذه؟</button></div>
 
     {activeTab === "flows" ? <section className="shortcut-list">
-      <div className="shortcut-list__heading"><div><h2>أتمتاتي</h2><span>{workflows.filter((item) => item.active).length} تعمل الآن</span></div></div>
-      <div className="workflow-category-filter" aria-label="تصفية الأتمتات حسب التصنيف"><span>اعرض:</span><div>
+      <div className="shortcut-list__heading"><div><h2>أتمتاتي</h2><span>{workflows.filter((item) => item.active).length} من {workflows.length} تعمل الآن</span></div></div>
+      {workflowCategories.length > 1 && <div className="workflow-category-filter" aria-label="تصفية الأتمتات حسب التصنيف"><span>اعرض:</span><div>
         <button className={categoryFilter === "all" ? "is-active" : ""} type="button" onClick={() => { setCategoryFilter("all"); setShowMoreCategories(false); }}>كل الأتمتات</button>
         {visibleCategories.map((category) => <button key={category} className={categoryFilter === category ? "is-active" : ""} type="button" onClick={() => { setCategoryFilter(category); setShowMoreCategories(false); }}>{category}</button>)}
         {moreCategories.length > 0 && <span className="workflow-category-filter__more"><button className={moreCategories.includes(categoryFilter) ? "is-active" : ""} type="button" onClick={() => setShowMoreCategories((open) => !open)} aria-expanded={showMoreCategories}>المزيد <ChevronDown /></button>{showMoreCategories && <span role="menu">{moreCategories.map((category) => <button key={category} role="menuitem" className={categoryFilter === category ? "is-active" : ""} type="button" onClick={() => { setCategoryFilter(category); setShowMoreCategories(false); }}>{category}</button>)}</span>}</span>}
-      </div></div>
+      </div></div>}
       {visibleWorkflows.length ? visibleWorkflows.map((workflow) => {
         const metadata = workflowMetadata[workflow.id];
         const needsReview = requiresAiReview(metadata);
@@ -958,7 +916,7 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
           {needsReview && <div className="ai-review-badge"><Sparkles /> تحتاج إلى مراجعة</div>}
           <div className="shortcut-card__top">
             <span className="shortcut-card__icon"><AutomationIcon iconId={workflow.icon} /></span>
-            <div><strong>{workflow.name}</strong><small>{workflow.category || "شخصية"} · {workflow.conditions.length} من أحداث وشروط البدء · {workflow.actions.length} من خطوات التنفيذ</small></div>
+            <div><strong>{workflow.name}</strong><small>{workflow.category || "شخصية"} · {workflow.conditions.length + workflow.actions.length} خطوات</small></div>
             <div className="shortcut-card__controls">
               <button className="shortcut-card__advanced" type="button" onClick={() => setAdvancedTarget(workflow)} aria-label={`الخيارات المتقدمة لـ ${workflow.name}`} title="خيارات متقدمة"><Settings2 /></button>
               {needsReview
@@ -966,15 +924,40 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
                 : <button className={`shortcut-toggle ${workflow.active ? "is-on" : ""}`} type="button" onClick={() => setWorkflows((items) => items.map((item) => item.id === workflow.id ? { ...item, active: !item.active } : item))} aria-label={`${workflow.active ? "إيقاف" : "تشغيل"} ${workflow.name}`}><i /></button>}
             </div>
           </div>
-          <div className="shortcut-pipeline"><div><small>تبدأ عندما</small>{workflow.conditions.map((condition) => <span key={condition.id}>{conditionLabel(condition)}</span>)}</div><ChevronLeft /><div><small>ثم تنفذ</small>{workflow.actions.map((action) => <span key={action.id}>{actionSummary(action)}</span>)}</div></div>
+          <div className="shortcut-pipeline"><div><small>عندما</small>{workflow.conditions.map((condition) => <span key={condition.id}>{conditionLabel(condition)}</span>)}</div><ChevronLeft /><div><small>ينفّذ</small>{workflow.actions.map((action) => <span key={action.id}>{actionSummary(action)}</span>)}</div></div>
           <footer><span>{needsReview ? "غير مفعلة · راجعها قبل النشر" : workflow.runs ? `نُفذت ${workflow.runs} مرة` : "لم يصل حدث مطابق بعد"}</span><div><button type="button" onClick={() => setEditor(workflow)}><PencilLine /> تعديل</button><button className="shortcut-card__delete" type="button" onClick={() => setDeleteTarget(workflow)} aria-label={`حذف ${workflow.name}`} title="حذف الأتمتة"><Trash2 /></button></div></footer>
         </article>;
       }) : <div className="shortcut-filter-empty"><ListChecks /><strong>لا توجد أتمتات ضمن «{categoryFilter}»</strong><span>اختر تصنيفًا آخر أو أنشئ أتمتة جديدة.</span></div>}
-    </section> : <section className="shortcut-history"><header><div><h2>ما الذي تم تنفيذه؟</h2><span>نتيجة كل حدث وكل خطوة بالترتيب</span></div><button type="button" onClick={() => setHistory([])}><Trash2 /> مسح السجل</button></header>{history.length ? history.map((item) => <div className={`shortcut-log shortcut-log--${item.status}`} key={item.id}><i /><div><strong>{item.title}</strong><span>{item.detail}</span></div><time>{item.time}</time></div>) : <div className="shortcut-empty"><FileText /><strong>لم تُشغّل أي أحداث بعد</strong><span>اختر حدثاً من مربع التجربة في الأعلى.</span></div>}</section>}
+      <section className="test-tools-disclosure">
+        <button type="button" onClick={() => setShowTestTools((value) => !value)} aria-expanded={showTestTools}>
+          <span><Zap /><span><strong>اختبار الأتمتات</strong><small>شغّل حدثًا تجريبيًا بأمان</small></span></span><ChevronDown />
+        </button>
+        {showTestTools && <section className="event-console">
+          <div className="event-console__heading">
+            <span className="event-console__step">1</span>
+            <div><small>اختبار آمن</small><h2>اختر حدثًا تجريبيًا</h2><p>سنشغّل الأتمتة المرتبطة دون تحريك أموال حقيقية.</p></div>
+            <button type="button" onClick={refreshFinancialData} aria-label="تحديث بيانات الحساب" title="جلب أحدث بيانات الحساب"><Repeat2 /></button>
+          </div>
+          <div className="event-grid">{primaryEvents.map(renderEventButton)}</div>
+          <button className={`event-more-toggle ${showMoreEvents ? "is-open" : ""}`} type="button" onClick={() => setShowMoreEvents((value) => !value)} aria-expanded={showMoreEvents}>
+            <span><strong>أحداث أخرى</strong><small>اشتراك، رصيد منخفض، ونهاية الشهر</small></span><ChevronDown />
+          </button>
+          {showMoreEvents && <div className="event-grid event-grid--additional">{additionalEvents.map(renderEventButton)}</div>}
+          {lastEvent && <div className={`event-result ${lastEvent.matchedCount ? "is-success" : "is-neutral"}`}>
+            <CheckCircle2 />
+            <span><strong>تمت محاكاة: {lastEvent.label}</strong><small>{lastEvent.matchedCount ? `تم تشغيل ${lastEvent.matchedCount} من الأتمتات المرتبطة. راجع النتيجة في سجل التنفيذ.` : "لا توجد أتمتة مرتبطة بهذا الحدث حالياً."}</small></span>
+          </div>}
+          <div className="event-account-summary">
+            <span><Landmark /><small>رصيد الحساب التجريبي</small><strong>{formatMoney(balance, currency)}</strong></span>
+            <span><Zap /><small>أحداث جربتها</small><strong>{eventCount}</strong></span>
+            {approvalQueue.length > 0 && <span className="needs-attention"><ShieldCheck /><small>بانتظار موافقتك</small><strong>{approvalQueue.length}</strong></span>}
+          </div>
+        </section>}
+      </section>
+    </section> : <section className="shortcut-history"><header><div><h2>ما الذي تم تنفيذه؟</h2><span>نتيجة كل حدث وكل خطوة بالترتيب</span></div><button type="button" onClick={() => setHistory([])}><Trash2 /> مسح السجل</button></header>{history.length ? history.map((item) => <div className={`shortcut-log shortcut-log--${item.status}`} key={item.id}><i /><div><strong>{item.title}</strong><span>{item.detail}</span></div><time>{item.time}</time></div>) : <div className="shortcut-empty"><FileText /><strong>لم تُشغّل أي أحداث بعد</strong><span>اختبر أتمتة لتظهر النتيجة هنا.</span></div>}</section>}
     </>}
 
     <div className="assistant-launcher" aria-label="التواصل مع مساعد AutoFlow">
-      <button className="assistant-launcher__voice" type="button" onClick={() => openAssistant("voice")} aria-label="التحدث صوتيًا مع AutoFlow"><Mic /></button>
       <button className="assistant-launcher__chat" type="button" onClick={() => openAssistant("text")} aria-label="فتح مساعد AutoFlow"><Sparkles /><span>اسأل AutoFlow</span></button>
     </div>
     <AutomationAssistant open={assistantOpen} initialMode={assistantMode} onClose={() => setAssistantOpen(false)} account={financialSnapshot?.account} financialSnapshot={financialSnapshot} bills={bills} workflows={workflows} workflowMetadata={workflowMetadata} onDraft={saveAiDraft} openDraft={openDraftById} />
