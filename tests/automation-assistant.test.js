@@ -650,10 +650,17 @@ test("54. phone viewports use the full screen while the assistant stays inside t
 
 test("55. assistant conversation and automation editor remain touch-scrollable", async () => {
   const studioSource = await readFile(new URL("../src/AutoFlowStudio.jsx", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
   const shortcutStyles = await readFile(new URL("../src/shortcut.css", import.meta.url), "utf8");
   assert.match(studioSource, /className="assistant-text-scroll" ref=\{messagesRef\}/);
+  assert.match(studioSource, /className="shortcut-editor__scroll" ref=\{scrollRef\}/);
+  assert.match(studioSource, /target\.scrollIntoView\(\{ behavior: "smooth", block: "center" \}\)/);
+  assert.match(studioSource, /data-validation-path="name"/);
+  assert.match(studioSource, /className=\{`shortcut-editor__footer/);
   assert.match(shortcutStyles, /\.assistant-text-scroll \{[^}]*flex: 1 1 auto;[^}]*min-height: 0;[^}]*overflow-y: auto;[^}]*touch-action: pan-y;/);
   assert.match(shortcutStyles, /\.shortcut-editor__scroll \{[^}]*flex: 1 1 auto;[^}]*min-height: 0;[^}]*overflow-y: auto;[^}]*touch-action: pan-y;/);
+  assert.match(shortcutStyles, /\.shortcut-editor__footer \{[^}]*flex: 0 0 auto;[^}]*env\(safe-area-inset-bottom\)/);
+  assert.match(styles, /\.phone input:not\(\[type="checkbox"\]\):not\(\[type="radio"\]\), \.phone select, \.phone textarea \{[\s\S]*?font-size: 16px !important;/);
 });
 
 test("56. voice draft and app navigation use touch scrolling and smooth transitions", async () => {
@@ -804,8 +811,9 @@ test("60. common templates open as complete editable drafts without publishing",
   assert.equal(buildAutomationTemplate("unknown-template"), null);
 
   const source = await readFile(new URL("../src/AutoFlowStudio.jsx", import.meta.url), "utf8");
-  assert.match(source, /قوالب جاهزة/);
+  assert.match(source, /أفكار جاهزة لك/);
   assert.match(source, /COMMON_AUTOMATION_TEMPLATES\.slice/);
   assert.match(source, /setEditor\(draft\)/);
-  assert.match(source, /استخدم القالب/);
+  assert.match(source, /ابدأ بقالب وعدّله بطريقتك/);
+  assert.ok(source.indexOf("common-automation-templates") > source.indexOf("automation-empty-state"));
 });

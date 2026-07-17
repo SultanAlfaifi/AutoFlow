@@ -275,6 +275,8 @@ function ShortcutEditor({ workflow, beneficiaries, account, metadata, isNew, clo
   const [guideOpen, setGuideOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [showValidation, setShowValidation] = useState(false);
+  const [activeError, setActiveError] = useState(null);
+  const scrollRef = useRef(null);
   const isAiDraft = requiresAiReview(metadata);
   const usesScheduledBalance = draft.conditions.some((condition) => condition.type === "scheduled");
   const update = (patch) => setDraft((current) => ({ ...current, ...patch }));
@@ -288,8 +290,30 @@ function ShortcutEditor({ workflow, beneficiaries, account, metadata, isNew, clo
     [actions[index], actions[nextIndex]] = [actions[nextIndex], actions[index]];
     update({ actions });
   };
-  const issues = validateAutomation(draft, { source: "manual", beneficiaries }).map((item) => item.message);
-  const isComplete = issues.length === 0;
+  const validationIssues = validateAutomation(draft, { source: "manual", beneficiaries });
+  const isComplete = validationIssues.length === 0;
+  const revealIssue = (validationIssue) => {
+    if (!validationIssue) return;
+    const actionIndex = Number(validationIssue.path.match(/^actions\[(\d+)\]/)?.[1]);
+    if (Number.isInteger(actionIndex) && draft.actions[actionIndex]) setOpenActionId(draft.actions[actionIndex].id);
+    setActiveError(validationIssue);
+  };
+  useEffect(() => {
+    if (!activeError || !scrollRef.current) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      const targets = [...scrollRef.current.querySelectorAll("[data-validation-path]")];
+      targets.forEach((target) => target.classList.remove("is-validation-target"));
+      const exactTarget = targets.find((target) => target.dataset.validationPath === activeError.path);
+      const nearestTarget = targets
+        .filter((target) => activeError.path.startsWith(target.dataset.validationPath || ""))
+        .sort((first, second) => (second.dataset.validationPath || "").length - (first.dataset.validationPath || "").length)[0];
+      const target = exactTarget || nearestTarget;
+      if (!target) return;
+      target.classList.add("is-validation-target");
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeError, openActionId]);
   const finishWithAnimation = (callback) => {
     setIsClosing(true);
     window.setTimeout(callback, 200);
@@ -298,6 +322,7 @@ function ShortcutEditor({ workflow, beneficiaries, account, metadata, isNew, clo
   const requestSave = () => {
     if (!isComplete) {
       setShowValidation(true);
+      revealIssue(validationIssues[0]);
       return;
     }
     finishWithAnimation(() => save(draft));
@@ -305,6 +330,7 @@ function ShortcutEditor({ workflow, beneficiaries, account, metadata, isNew, clo
   const requestAiPublish = () => {
     if (!isComplete) {
       setShowValidation(true);
+      revealIssue(validationIssues[0]);
       return;
     }
     requestPublish({ ...draft, active: false });
@@ -317,20 +343,16 @@ function ShortcutEditor({ workflow, beneficiaries, account, metadata, isNew, clo
           <button type="button" onClick={requestClose} aria-label="إغلاق"><X /></button>
           <div className="shortcut-editor__title"><span>{isNew ? "إنشاء أتمتة جديدة" : "تعديل الأتمتة"}</span><strong>{draft.name || "رتّبها بالطريقة التي تناسبك"}</strong></div>
           <button type="button" className="shortcut-help-button" onClick={() => setGuideOpen(true)} aria-label="شرح طريقة بناء الأتمتة" title="شرح طريقة بناء الأتمتة"><CircleHelp /></button>
-          <div className="shortcut-editor__primary-actions">
-            <button type="button" className="save-shortcut" onClick={requestSave}><CheckCircle2 /> {isAiDraft ? "حفظ للمراجعة" : "حفظ"}</button>
-            {isAiDraft && <button type="button" className="publish-ai-draft" onClick={requestAiPublish}><ShieldCheck /> نشر بعد المراجعة</button>}
-          </div>
         </header>
 
         <div className="shortcut-editor__progress shortcut-editor__progress--simple"><span className={draft.conditions.length ? "is-done" : ""}>1 حدث البدء</span><i /><span className={draft.actions.length ? "is-done" : ""}>2 خطوات التنفيذ</span></div>
         {isAiDraft && <div className="ai-review-banner" role="status"><Sparkles /><div><strong>تحتاج إلى مراجعة</strong><span>تم إنشاء هذه المسودة باستخدام الذكاء الاصطناعي، ولم يتم تفعيلها. راجع جميع الخطوات قبل النشر.</span><small>المصدر: {account?.name || "الحساب الجاري المتصل"} · وجهة الادخار الثابتة: {beneficiaries.find((item) => item.kind === "internal")?.name || "حساب الادخار"}</small></div></div>}
-        {showValidation && !isComplete && <div className="shortcut-validation" role="alert"><strong>أكمل التالي قبل الحفظ</strong><ul>{issues.slice(0, 3).map((message) => <li key={message}>{message}</li>)}</ul></div>}
+        {showValidation && !isComplete && <div className="shortcut-validation" role="alert"><strong>وجدنا حقولًا تحتاج انتباهك</strong><ul>{validationIssues.slice(0, 3).map((validationIssue) => <li key={`${validationIssue.path}-${validationIssue.code}`}><button type="button" onClick={() => revealIssue(validationIssue)}>{validationIssue.message}</button></li>)}</ul></div>}
 
-        <div className="shortcut-editor__scroll">
+        <div className="shortcut-editor__scroll" ref={scrollRef}>
           <section className="shortcut-identity" style={{ "--automation-color": automationColor(draft.color) }}>
             <div className="shortcut-identity__heading"><span className="shortcut-identity__icon"><AutomationIcon iconId={draft.icon} /></span><div><small>هوية الأتمتة</small><h2>سمِّها ونظِّمها</h2><p>يسهّل عليك العثور عليها لاحقًا بين أتمتاتك.</p></div></div>
-            <label className="shortcut-identity__name"><span>اسم الأتمتة</span><input value={draft.name} onChange={(event) => update({ name: event.target.value })} aria-label="اسم الأتمتة" placeholder="مثال: ادخار من الراتب" /></label>
+            <label className="shortcut-identity__name"><span>اسم الأتمتة</span><input data-validation-path="name" value={draft.name} onChange={(event) => update({ name: event.target.value })} aria-label="اسم الأتمتة" placeholder="مثال: ادخار من الراتب" /></label>
             <div className="shortcut-identity__options">
               <label><span>التصنيف</span><select value={draft.category} onChange={(event) => update({ category: event.target.value })}>{AUTOMATION_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}</select></label>
               <div><span>لون الأتمتة</span><div className="color-swatches" role="group" aria-label="لون الأتمتة">{automationColors.map((color) => <button key={color.id} type="button" className={draft.color === color.id ? "is-selected" : ""} style={{ "--swatch-color": color.value }} onClick={() => update({ color: color.id })} aria-label={color.label} title={color.label} />)}</div></div>
@@ -338,7 +360,7 @@ function ShortcutEditor({ workflow, beneficiaries, account, metadata, isNew, clo
             </div>
           </section>
 
-          <section className="shortcut-block-section shortcut-block-section--conditions">
+          <section className="shortcut-block-section shortcut-block-section--conditions" data-validation-path="conditions">
             <div className="shortcut-section-heading"><div><small>متى تبدأ الأتمتة؟</small><h2>أحداث وشروط البدء</h2><p>اختر الحدث، ثم حدّد علاقته بالشرط الذي قبله.</p></div></div>
             <div className="shortcut-stack">
               {draft.conditions.map((condition, index) => {
@@ -353,22 +375,22 @@ function ShortcutEditor({ workflow, beneficiaries, account, metadata, isNew, clo
                     </div>
                     <span>{joinWith === "and" ? "يجب أن يتحقق الشرطان معاً" : "يكفي أن يتحقق أحد الشرطين"}</span>
                   </div>}
-                  <article className="shortcut-block condition-block">
+                  <article className="shortcut-block condition-block" data-validation-path={`conditions[${index}]`}>
                   <span className="block-order">{index + 1}</span><span className="block-icon"><Icon /></span>
                   <div className="block-fields">
-                    <select className={!condition.type ? "is-placeholder" : ""} value={condition.type} onChange={(event) => updateCondition(condition.id, { type: event.target.value })}><option value="">اختر الحدث الذي يبدأ الأتمتة</option>{eventTypes.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
+                    <select data-validation-path={`conditions[${index}].type`} className={!condition.type ? "is-placeholder" : ""} value={condition.type} onChange={(event) => updateCondition(condition.id, { type: event.target.value })}><option value="">اختر الحدث الذي يبدأ الأتمتة</option>{eventTypes.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
                     {condition.type && <small className="field-help">{eventHelp[condition.type]}</small>}
                     {condition.type && <small className="field-example"><b>مثال</b><span>{AUTOMATION_TRIGGER_EXAMPLES[condition.type]}</span></small>}
                     {condition.type === "scheduled" && <div className="schedule-settings">
-                      <label><span>التكرار</span><select aria-label="نوع التكرار" value={condition.schedule.mode} onChange={(event) => updateSchedule(condition.id, { mode: event.target.value })}>{scheduleModes.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}</option>)}</select></label>
-                      {condition.schedule.mode === "once" && <label><span>التاريخ</span><input aria-label="تاريخ التنفيذ" type="date" value={condition.schedule.date} onChange={(event) => updateSchedule(condition.id, { date: event.target.value })} /></label>}
-                      {condition.schedule.mode === "monthly" && <label><span>يوم الشهر</span><input aria-label="يوم الشهر" type="number" min="1" max="31" value={condition.schedule.dayOfMonth} onChange={(event) => updateSchedule(condition.id, { dayOfMonth: event.target.value })} placeholder="مثال: 1" /></label>}
-                      <label><span>الوقت</span><input aria-label="وقت التنفيذ" type="time" value={condition.schedule.time} onChange={(event) => updateSchedule(condition.id, { time: event.target.value })} /></label>
-                      {condition.schedule.mode === "weekly" && <div className="schedule-weekdays" role="group" aria-label="أيام التكرار">{weekdayOptions.map((day) => { const selected = condition.schedule.weekdays.includes(day.id); return <button key={day.id} type="button" className={selected ? "is-selected" : ""} onClick={() => updateSchedule(condition.id, { weekdays: selected ? condition.schedule.weekdays.filter((item) => item !== day.id) : [...condition.schedule.weekdays, day.id] })}>{day.label}</button>; })}</div>}
+                      <label><span>التكرار</span><select data-validation-path={`conditions[${index}].schedule.mode`} aria-label="نوع التكرار" value={condition.schedule.mode} onChange={(event) => updateSchedule(condition.id, { mode: event.target.value })}>{scheduleModes.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}</option>)}</select></label>
+                      {condition.schedule.mode === "once" && <label><span>التاريخ</span><input data-validation-path={`conditions[${index}].schedule.date`} aria-label="تاريخ التنفيذ" type="date" value={condition.schedule.date} onChange={(event) => updateSchedule(condition.id, { date: event.target.value })} /></label>}
+                      {condition.schedule.mode === "monthly" && <label><span>يوم الشهر</span><input data-validation-path={`conditions[${index}].schedule.dayOfMonth`} aria-label="يوم الشهر" type="number" min="1" max="31" value={condition.schedule.dayOfMonth} onChange={(event) => updateSchedule(condition.id, { dayOfMonth: event.target.value })} placeholder="مثال: 1" /></label>}
+                      <label><span>الوقت</span><input data-validation-path={`conditions[${index}].schedule.time`} aria-label="وقت التنفيذ" type="time" value={condition.schedule.time} onChange={(event) => updateSchedule(condition.id, { time: event.target.value })} /></label>
+                      {condition.schedule.mode === "weekly" && <div className="schedule-weekdays" data-validation-path={`conditions[${index}].schedule.weekdays`} role="group" aria-label="أيام التكرار">{weekdayOptions.map((day) => { const selected = condition.schedule.weekdays.includes(day.id); return <button key={day.id} type="button" className={selected ? "is-selected" : ""} onClick={() => updateSchedule(condition.id, { weekdays: selected ? condition.schedule.weekdays.filter((item) => item !== day.id) : [...condition.schedule.weekdays, day.id] })}>{day.label}</button>; })}</div>}
                       <small>المنطقة الزمنية: الرياض (Asia/Riyadh)</small>
                     </div>}
-                    {condition.type && !["balance-below", "month-end", "scheduled"].includes(condition.type) && <div className="inline-settings"><select aria-label="تحديد مبلغ الحدث" value={condition.operator} onChange={(event) => updateCondition(condition.id, { operator: event.target.value })}><option value="any">مهما كان المبلغ</option><option value="gte">إذا كان المبلغ يساوي أو يزيد عن</option><option value="lte">إذا كان المبلغ يساوي أو يقل عن</option></select>{condition.operator !== "any" && <input aria-label="قيمة المبلغ" type="number" min="0" value={condition.value} onChange={(event) => updateCondition(condition.id, { value: event.target.value })} placeholder="مثال: 500" />}</div>}
-                    {condition.type === "balance-below" && <label><span>الرصيد أقل من</span><input aria-label="حد الرصيد المنخفض" type="number" min="0" value={condition.value} onChange={(event) => updateCondition(condition.id, { value: event.target.value })} placeholder="مثال: 1000" /></label>}
+                    {condition.type && !["balance-below", "month-end", "scheduled"].includes(condition.type) && <div className="inline-settings"><select data-validation-path={`conditions[${index}].operator`} aria-label="تحديد مبلغ الحدث" value={condition.operator} onChange={(event) => updateCondition(condition.id, { operator: event.target.value })}><option value="any">مهما كان المبلغ</option><option value="gte">إذا كان المبلغ يساوي أو يزيد عن</option><option value="lte">إذا كان المبلغ يساوي أو يقل عن</option></select>{condition.operator !== "any" && <input data-validation-path={`conditions[${index}].value`} aria-label="قيمة المبلغ" type="number" min="0" value={condition.value} onChange={(event) => updateCondition(condition.id, { value: event.target.value })} placeholder="مثال: 500" />}</div>}
+                    {condition.type === "balance-below" && <label><span>الرصيد أقل من</span><input data-validation-path={`conditions[${index}].value`} aria-label="حد الرصيد المنخفض" type="number" min="0" value={condition.value} onChange={(event) => updateCondition(condition.id, { value: event.target.value })} placeholder="مثال: 1000" /></label>}
                     {condition.type === "subscription" && <label><span>اختر الاشتراك</span><select aria-label="اختر الاشتراك" value={condition.merchant} onChange={(event) => updateCondition(condition.id, { merchant: event.target.value })}>
                       <option value="">أي اشتراك دوري</option>
                       {condition.merchant && !subscriptionServices.some((service) => service.name === condition.merchant) && <option value={condition.merchant}>{condition.merchant}</option>}
@@ -386,7 +408,7 @@ function ShortcutEditor({ workflow, beneficiaries, account, metadata, isNew, clo
 
           <div className="shortcut-connector"><i /><span>ثم نفّذ بالترتيب</span><i /></div>
 
-          <section className="shortcut-block-section shortcut-block-section--actions">
+          <section className="shortcut-block-section shortcut-block-section--actions" data-validation-path="actions">
             <div className="shortcut-section-heading"><div><small>ماذا تفعل الأتمتة؟</small><h2>خطوات التنفيذ بالترتيب</h2><p>تُنفذ الخطوة رقم 1 أولاً، ثم التي تحتها. سنطلب موافقتك دائمًا بشكل افتراضي.</p></div><span>{stepCountLabel(draft.actions.length)}</span></div>
             <div className="shortcut-stack">
               {draft.actions.map((action, index) => {
@@ -394,7 +416,7 @@ function ShortcutEditor({ workflow, beneficiaries, account, metadata, isNew, clo
                 const Icon = meta?.icon || Settings2;
                 const expanded = openActionId === action.id;
                 const actionDestinations = getActionDestinations(action.type, beneficiaries);
-                return <article className={`shortcut-block action-block ${expanded ? "is-expanded" : ""}`} key={action.id}>
+                return <article className={`shortcut-block action-block ${expanded ? "is-expanded" : ""}`} data-validation-path={`actions[${index}]`} key={action.id}>
                   <div className="action-block__head">
                     <button className="action-block__summary" type="button" onClick={() => setOpenActionId(expanded ? null : action.id)} aria-expanded={expanded}>
                       <span className="block-order">{index + 1}</span><span className="block-icon"><Icon /></span><span><strong>{meta?.label || "اختر نوع خطوة التنفيذ"}</strong><small>{!action.type ? "لم يتم اختيار الإجراء بعد" : action.approval.mode === "auto" ? "ينفذ تلقائياً" : action.approval.mode === "always" ? "ينتظر موافقتي" : action.approval.mode === "above" ? `يطلب موافقتي فوق ${action.approval.threshold || "مبلغ تحدده"}` : "اختر طريقة الموافقة"}</small></span><Settings2 />
@@ -405,14 +427,14 @@ function ShortcutEditor({ workflow, beneficiaries, account, metadata, isNew, clo
                     </div>
                   </div>
                   {expanded && <div className="action-block__settings">
-                    <label><span>ماذا تنفذ هذه الخطوة؟</span><select className={!action.type ? "is-placeholder" : ""} value={action.type} onChange={(event) => updateAction(action.id, { type: event.target.value, beneficiaryId: "", ...(event.target.value === "pay-bills" ? { message: "all" } : {}) })}><option value="">اختر الإجراء</option>{actionTypes.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+                    <label><span>ماذا تنفذ هذه الخطوة؟</span><select data-validation-path={`actions[${index}].type`} className={!action.type ? "is-placeholder" : ""} value={action.type} onChange={(event) => updateAction(action.id, { type: event.target.value, beneficiaryId: "", ...(event.target.value === "pay-bills" ? { message: "all" } : {}) })}><option value="">اختر الإجراء</option>{actionTypes.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
                     {action.type && <small className="field-help">{actionHelp[action.type]}</small>}
                     {action.type && <small className="field-example"><b>مثال</b><span>{AUTOMATION_ACTION_EXAMPLES[action.type]}</span></small>}
-                    {meta?.money && action.type !== "pay-bills" && <div className="two-fields"><label><span>كيف يُحسب المبلغ؟</span><select value={action.amountMode} onChange={(event) => updateAction(action.id, { amountMode: event.target.value })}><option value="percent">{usesScheduledBalance ? "نسبة من الرصيد المتاح وقت التنفيذ" : "نسبة من مبلغ الحدث"}</option><option value="balance-percent">نسبة من الرصيد المتبقي وقت هذه الخطوة</option><option value="fixed">مبلغ ثابت أحدده</option></select></label><label><span>{["percent", "balance-percent"].includes(action.amountMode) ? "النسبة المئوية" : "المبلغ"}</span><input type="number" min="0" max={["percent", "balance-percent"].includes(action.amountMode) ? "100" : undefined} value={action.value} onChange={(event) => updateAction(action.id, { value: event.target.value })} placeholder={["percent", "balance-percent"].includes(action.amountMode) ? "مثال: 10" : "مثال: 500"} /></label></div>}
-                    {action.type === "pay-bills" && <label><span>ما الذي تريد سداده؟</span><select value={action.message || "all"} onChange={(event) => updateAction(action.id, { message: event.target.value })}>{BILL_PAYMENT_TARGETS.map((target) => <option key={target.id} value={target.id}>{target.label}</option>)}</select></label>}
+                    {meta?.money && action.type !== "pay-bills" && <div className="two-fields"><label><span>كيف يُحسب المبلغ؟</span><select data-validation-path={`actions[${index}].amountMode`} value={action.amountMode} onChange={(event) => updateAction(action.id, { amountMode: event.target.value })}><option value="percent">{usesScheduledBalance ? "نسبة من الرصيد المتاح وقت التنفيذ" : "نسبة من مبلغ الحدث"}</option><option value="balance-percent">نسبة من الرصيد المتبقي وقت هذه الخطوة</option><option value="fixed">مبلغ ثابت أحدده</option></select></label><label><span>{["percent", "balance-percent"].includes(action.amountMode) ? "النسبة المئوية" : "المبلغ"}</span><input data-validation-path={`actions[${index}].value`} type="number" min="0" max={["percent", "balance-percent"].includes(action.amountMode) ? "100" : undefined} value={action.value} onChange={(event) => updateAction(action.id, { value: event.target.value })} placeholder={["percent", "balance-percent"].includes(action.amountMode) ? "مثال: 10" : "مثال: 500"} /></label></div>}
+                    {action.type === "pay-bills" && <label><span>ما الذي تريد سداده؟</span><select data-validation-path={`actions[${index}].message`} value={action.message || "all"} onChange={(event) => updateAction(action.id, { message: event.target.value })}>{BILL_PAYMENT_TARGETS.map((target) => <option key={target.id} value={target.id}>{target.label}</option>)}</select></label>}
                     {action.type === "save" && <div className="field-help field-help--fixed">سيُحوّل تلقائيًا إلى حساب الادخار التجريبي.</div>}
-                    {["internal-transfer", "beneficiary-transfer", "split"].includes(action.type) && <label><span>إلى أين يذهب المبلغ؟</span><select className={!action.beneficiaryId ? "is-placeholder" : ""} value={action.beneficiaryId} onChange={(event) => updateAction(action.id, { beneficiaryId: event.target.value })}><option value="">{action.type === "internal-transfer" ? "اختر أحد حساباتي" : action.type === "beneficiary-transfer" ? "اختر المستفيد" : "اختر الحساب أو المستفيد"}</option>{actionDestinations.map((item) => <option key={item.id} value={item.id}>{item.name} — {item.account}</option>)}</select></label>}
-                    {["notify", "categorize"].includes(action.type) && <label><span>{action.type === "notify" ? "نص الإشعار" : "التصنيف"}</span><input value={action.message} onChange={(event) => updateAction(action.id, { message: event.target.value })} placeholder={action.type === "notify" ? "مثال: تم تنفيذ الأتمتة" : "مثال: اشتراكات"} /></label>}
+                    {["internal-transfer", "beneficiary-transfer", "split"].includes(action.type) && <label><span>إلى أين يذهب المبلغ؟</span><select data-validation-path={`actions[${index}].beneficiaryId`} className={!action.beneficiaryId ? "is-placeholder" : ""} value={action.beneficiaryId} onChange={(event) => updateAction(action.id, { beneficiaryId: event.target.value })}><option value="">{action.type === "internal-transfer" ? "اختر أحد حساباتي" : action.type === "beneficiary-transfer" ? "اختر المستفيد" : "اختر الحساب أو المستفيد"}</option>{actionDestinations.map((item) => <option key={item.id} value={item.id}>{item.name} — {item.account}</option>)}</select></label>}
+                    {["notify", "categorize"].includes(action.type) && <label><span>{action.type === "notify" ? "نص الإشعار" : "التصنيف"}</span><input data-validation-path={`actions[${index}].message`} value={action.message} onChange={(event) => updateAction(action.id, { message: event.target.value })} placeholder={action.type === "notify" ? "مثال: تم تنفيذ الأتمتة" : "مثال: اشتراكات"} /></label>}
 
                     <div className="action-block__tools"><button type="button" onClick={() => update({ actions: draft.actions.filter((item) => item.id !== action.id) })}><Trash2 /> حذف خطوة التنفيذ</button></div>
                   </div>}
@@ -423,6 +445,12 @@ function ShortcutEditor({ workflow, beneficiaries, account, metadata, isNew, clo
             <button className="add-shortcut-block add-shortcut-block--action" type="button" onClick={() => { const action = makeAction(); update({ actions: [...draft.actions, action] }); setOpenActionId(action.id); }}><Plus /> {draft.actions.length ? "إضافة خطوة تنفيذ جديدة" : "إضافة أول خطوة تنفيذ"}</button>
           </section>
         </div>
+
+        {showValidation && activeError && !isComplete && <div className="shortcut-editor__error-guide" role="status"><AlertTriangle /><span><small>نقلناك إلى موضع الخطأ</small><strong>{activeError.message}</strong></span></div>}
+        <footer className={`shortcut-editor__footer ${isAiDraft ? "shortcut-editor__footer--ai" : ""}`}>
+          <button type="button" className="save-shortcut" onClick={requestSave}><CheckCircle2 /> {isAiDraft ? "حفظ المسودة" : "حفظ الأتمتة"}</button>
+          {isAiDraft && <button type="button" className="publish-ai-draft" onClick={requestAiPublish}><ShieldCheck /> نشر بعد المراجعة</button>}
+        </footer>
 
         {guideOpen && <div className="shortcut-guide-layer">
           <section className="shortcut-guide" role="dialog" aria-modal="true" aria-label="دليل بناء الأتمتة">
@@ -1077,23 +1105,6 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
       <span><strong>إنشاء أتمتة جديدة</strong><small>اختر متى تبدأ وماذا تنفّذ</small></span>
       <ChevronLeft />
     </button>
-    <section className="common-automation-templates" aria-labelledby="common-templates-title">
-      <header>
-        <div><small>ابدأ بسرعة</small><h2 id="common-templates-title">قوالب جاهزة</h2><p>اختر الأقرب لك، ثم عدّل المبلغ أو الموعد قبل الحفظ.</p></div>
-        <button type="button" onClick={() => setShowAllTemplates((value) => !value)} aria-expanded={showAllTemplates}>{showAllTemplates ? "عرض أقل" : "عرض الكل"}</button>
-      </header>
-      <div className="common-template-grid">
-        {COMMON_AUTOMATION_TEMPLATES.slice(0, showAllTemplates ? COMMON_AUTOMATION_TEMPLATES.length : 4).map((template) => {
-          const Icon = templateIcons[template.icon] || Sparkles;
-          return <button className={`common-template-card common-template-card--${template.tone}`} type="button" key={template.id} onClick={() => useAutomationTemplate(template)}>
-            <span className="common-template-card__icon"><Icon /></span>
-            <span className="common-template-card__copy"><em>{template.badge}</em><strong>{template.title}</strong><small>{template.description}</small></span>
-            <span className="common-template-card__action">استخدم القالب <ChevronLeft /></span>
-          </button>;
-        })}
-      </div>
-    </section>
-
     {!workflows.length ? <section className="automation-empty-state">
       <span className="automation-empty-state__icon"><Sparkles /></span>
       <small>خلها علينا</small>
@@ -1158,6 +1169,26 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
       </section>
     </section> : <section className="shortcut-history"><header><div><h2>ما الذي تم تنفيذه؟</h2><span>نتيجة كل حدث وكل خطوة بالترتيب</span></div><button type="button" onClick={() => setHistory([])}><Trash2 /> مسح السجل</button></header>{history.length ? history.map((item) => <div className={`shortcut-log shortcut-log--${item.status}`} key={item.id}><i /><div><strong>{item.title}</strong><span>{item.detail}</span></div><time>{item.time}</time></div>) : <div className="shortcut-empty"><FileText /><strong>لم تُشغّل أي أحداث بعد</strong><span>اختبر أتمتة لتظهر النتيجة هنا.</span></div>}</section>}
     </>}
+
+    <section className="common-automation-templates" aria-labelledby="common-templates-title">
+      <header>
+        <span className="common-automation-templates__mark"><Sparkles /></span>
+        <div><small>أفكار جاهزة لك</small><h2 id="common-templates-title">ابدأ بقالب وعدّله بطريقتك</h2><p>اختر عملية شائعة، وسنجهّز تفاصيلها لتراجعها قبل الحفظ.</p></div>
+      </header>
+      <div className="common-template-grid">
+        {COMMON_AUTOMATION_TEMPLATES.slice(0, showAllTemplates ? COMMON_AUTOMATION_TEMPLATES.length : 4).map((template) => {
+          const Icon = templateIcons[template.icon] || Sparkles;
+          return <button className={`common-template-card common-template-card--${template.tone}`} type="button" key={template.id} onClick={() => useAutomationTemplate(template)}>
+            <span className="common-template-card__icon"><Icon /></span>
+            <span className="common-template-card__copy"><em>{template.badge}</em><strong>{template.title}</strong><small>{template.description}</small></span>
+            <span className="common-template-card__action" aria-hidden="true"><ChevronLeft /></span>
+          </button>;
+        })}
+      </div>
+      <button className="common-template-toggle" type="button" onClick={() => setShowAllTemplates((value) => !value)} aria-expanded={showAllTemplates}>
+        <span>{showAllTemplates ? "عرض قوالب أقل" : "استعراض كل القوالب"}</span><ChevronDown />
+      </button>
+    </section>
 
     <div className="assistant-launcher" aria-label="التواصل مع مساعد AutoFlow">
       <button className="assistant-launcher__chat" type="button" onClick={() => openAssistant("text")} aria-label="فتح مساعد AutoFlow"><Sparkles /><span>اسأل AutoFlow</span></button>
