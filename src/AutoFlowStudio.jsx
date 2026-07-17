@@ -558,9 +558,13 @@ function AutomationAssistant({ account, financialSnapshot, bills, workflows, wor
     inputRef.current?.focus();
   }, [open, mode]);
   useEffect(() => {
-    const element = messagesRef.current;
-    if (element) element.scrollTop = element.scrollHeight;
-  }, [conversation.messages, busy]);
+    if (!open || mode !== "text") return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      const element = messagesRef.current;
+      if (element) element.scrollTop = element.scrollHeight;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [conversation.messages, conversation.quick_replies, conversation.state?.draft, busy, error, open, mode]);
   useEffect(() => {
     const currentWorkflow = workflows.find((workflow) => workflow.id === `ai-${conversation.conversation_id}`);
     if (!currentWorkflow || currentWorkflow === conversation.state?.draft) return;
@@ -645,23 +649,25 @@ function AutomationAssistant({ account, financialSnapshot, bills, workflows, wor
       <button type="button" role="tab" aria-selected={mode === "text"} className={mode === "text" ? "is-active" : ""} onClick={() => setMode("text")}>كتابة</button>
       <button type="button" role="tab" aria-selected={mode === "voice"} className={mode === "voice" ? "is-active" : ""} onClick={() => setMode("voice")}><Mic /> صوت</button>
     </div>
-    {mode === "text" ? <>
-    <div className="automation-assistant__messages" aria-live="polite" role="log" ref={messagesRef}>
-      {conversation.messages.map((message) => <div key={message.id} className={`assistant-message assistant-message--${message.role}`}><span>{message.content}</span></div>)}
-      {busy && <div className="assistant-message assistant-message--assistant assistant-message--loading"><i /><i /><i /><span>أجهز المسودة الآمنة…</span></div>}
-    </div>
-    {conversation.quick_replies?.length > 0 && <div className="assistant-quick-replies">{conversation.quick_replies.map((reply) => {
-      const selected = selectedReplies.includes(reply.id);
-      return <button type="button" className={selected ? "is-selected" : ""} key={reply.id} onClick={() => conversation.quick_reply_mode === "multiple" ? setSelectedReplies((items) => selected ? items.filter((id) => id !== reply.id) : [...items, reply.id]) : submitMessage(reply.value)} disabled={busy}>{selected && <CheckCircle2 />} {reply.label}</button>;
-    })}{conversation.quick_reply_mode === "multiple" && <button type="button" className="assistant-quick-replies__confirm" disabled={busy || !selectedReplies.length} onClick={() => submitMessage(`المستفيدون المختارون: ${conversation.quick_replies.filter((reply) => selectedReplies.includes(reply.id)).map((reply) => reply.value).join("، ")}`)}>اعتماد المستفيدين ({selectedReplies.length})</button>}</div>}
-    {draft && <div className="assistant-understanding"><div><Sparkles /><span><strong>ما فهمه المساعد</strong><small>{draft.conditions.map(conditionLabel).join("، ")} ← {draft.actions.map(actionSummary).join("، ")}</small></span></div><button type="button" onClick={() => openDraft(draft.id)}>فتح المسودة في المحرر <ChevronLeft /></button></div>}
-    {error && <div className="assistant-error" role="alert"><AlertTriangle /><span>{error}</span></div>}
-    <form onSubmit={(event) => { event.preventDefault(); submitMessage(input); }}>
-      <input ref={inputRef} value={input} onChange={(event) => setInput(event.target.value)} disabled={busy} maxLength={2000} placeholder="مثال: إذا نزل راتبي حوّل 10% إلى الادخار" aria-label="وصف الأتمتة" />
-      <button type="submit" disabled={busy || !input.trim()} aria-label="إرسال"><Send /></button>
-    </form>
-    <footer><ShieldCheck /><span>ينشئ مسودة غير مفعلة فقط. النشر يتم يدويًا بعد المراجعة.</span></footer>
-    </> : <VoiceAssistant
+    {mode === "text" ? <div className="assistant-text-panel">
+      <div className="assistant-text-scroll" ref={messagesRef}>
+        <div className="automation-assistant__messages" aria-live="polite" role="log">
+          {conversation.messages.map((message) => <div key={message.id} className={`assistant-message assistant-message--${message.role}`}><span>{message.content}</span></div>)}
+          {busy && <div className="assistant-message assistant-message--assistant assistant-message--loading"><i /><i /><i /><span>أجهز المسودة الآمنة…</span></div>}
+        </div>
+        {conversation.quick_replies?.length > 0 && <div className="assistant-quick-replies">{conversation.quick_replies.map((reply) => {
+          const selected = selectedReplies.includes(reply.id);
+          return <button type="button" className={selected ? "is-selected" : ""} key={reply.id} onClick={() => conversation.quick_reply_mode === "multiple" ? setSelectedReplies((items) => selected ? items.filter((id) => id !== reply.id) : [...items, reply.id]) : submitMessage(reply.value)} disabled={busy}>{selected && <CheckCircle2 />} {reply.label}</button>;
+        })}{conversation.quick_reply_mode === "multiple" && <button type="button" className="assistant-quick-replies__confirm" disabled={busy || !selectedReplies.length} onClick={() => submitMessage(`المستفيدون المختارون: ${conversation.quick_replies.filter((reply) => selectedReplies.includes(reply.id)).map((reply) => reply.value).join("، ")}`)}>اعتماد المستفيدين ({selectedReplies.length})</button>}</div>}
+        {draft && <div className="assistant-understanding"><div><Sparkles /><span><strong>ما فهمه المساعد</strong><small>{draft.conditions.map(conditionLabel).join("، ")} ← {draft.actions.map(actionSummary).join("، ")}</small></span></div><button type="button" onClick={() => openDraft(draft.id)}>فتح المسودة في المحرر <ChevronLeft /></button></div>}
+        {error && <div className="assistant-error" role="alert"><AlertTriangle /><span>{error}</span></div>}
+      </div>
+      <form onSubmit={(event) => { event.preventDefault(); submitMessage(input); }}>
+        <input ref={inputRef} value={input} onChange={(event) => setInput(event.target.value)} disabled={busy} maxLength={2000} placeholder="مثال: إذا نزل راتبي حوّل 10% إلى الادخار" aria-label="وصف الأتمتة" />
+        <button type="submit" disabled={busy || !input.trim()} aria-label="إرسال"><Send /></button>
+      </form>
+      <footer><ShieldCheck /><span>ينشئ مسودة غير مفعلة فقط. النشر يتم يدويًا بعد المراجعة.</span></footer>
+    </div> : <VoiceAssistant
       key={conversation.conversation_id}
       conversationId={conversation.conversation_id}
       draft={draft}

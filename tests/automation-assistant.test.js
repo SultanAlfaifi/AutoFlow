@@ -640,3 +640,11 @@ test("54. phone viewports use the full screen while the assistant stays inside t
   assert.match(shortcutStyles, /\.assistant-launcher \{[\s\S]*?max-width: calc\(100% - 28px\)/);
   assert.match(shortcutStyles, /width: min\(520px, calc\(100% - 16px\)\)/);
 });
+
+test("55. assistant conversation and automation editor remain touch-scrollable", async () => {
+  const studioSource = await readFile(new URL("../src/AutoFlowStudio.jsx", import.meta.url), "utf8");
+  const shortcutStyles = await readFile(new URL("../src/shortcut.css", import.meta.url), "utf8");
+  assert.match(studioSource, /className="assistant-text-scroll" ref=\{messagesRef\}/);
+  assert.match(shortcutStyles, /\.assistant-text-scroll \{[^}]*flex: 1 1 auto;[^}]*min-height: 0;[^}]*overflow-y: auto;[^}]*touch-action: pan-y;/);
+  assert.match(shortcutStyles, /\.shortcut-editor__scroll \{[^}]*flex: 1 1 auto;[^}]*min-height: 0;[^}]*overflow-y: auto;[^}]*touch-action: pan-y;/);
+});
