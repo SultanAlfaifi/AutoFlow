@@ -48,6 +48,7 @@ import {
   SANDBOX_BILL_SERVICES,
   TRIGGER_TYPES,
   createAiMetadata,
+  getActionDestinations,
   makeAction,
   makeCondition,
   makeManualWorkflow,
@@ -341,6 +342,7 @@ function ShortcutEditor({ workflow, beneficiaries, account, metadata, close, sav
                 const meta = actionTypes.find((item) => item.id === action.type);
                 const Icon = meta?.icon || Settings2;
                 const expanded = openActionId === action.id;
+                const actionDestinations = getActionDestinations(action.type, beneficiaries);
                 return <article className={`shortcut-block action-block ${expanded ? "is-expanded" : ""}`} key={action.id}>
                   <div className="action-block__head">
                     <button className="action-block__summary" type="button" onClick={() => setOpenActionId(expanded ? null : action.id)} aria-expanded={expanded}>
@@ -352,13 +354,13 @@ function ShortcutEditor({ workflow, beneficiaries, account, metadata, close, sav
                     </div>
                   </div>
                   {expanded && <div className="action-block__settings">
-                    <label><span>ماذا تنفذ هذه الخطوة؟</span><select className={!action.type ? "is-placeholder" : ""} value={action.type} onChange={(event) => updateAction(action.id, { type: event.target.value, ...(event.target.value === "pay-bills" ? { message: "all" } : {}) })}><option value="">اختر الإجراء</option>{actionTypes.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+                    <label><span>ماذا تنفذ هذه الخطوة؟</span><select className={!action.type ? "is-placeholder" : ""} value={action.type} onChange={(event) => updateAction(action.id, { type: event.target.value, beneficiaryId: "", ...(event.target.value === "pay-bills" ? { message: "all" } : {}) })}><option value="">اختر الإجراء</option>{actionTypes.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
                     {action.type && <small className="field-help">{actionHelp[action.type]}</small>}
                     {action.type && <small className="field-example"><b>مثال</b><span>{AUTOMATION_ACTION_EXAMPLES[action.type]}</span></small>}
                     {meta?.money && action.type !== "pay-bills" && <div className="two-fields"><label><span>كيف يُحسب المبلغ؟</span><select value={action.amountMode} onChange={(event) => updateAction(action.id, { amountMode: event.target.value })}><option value="percent">{usesScheduledBalance ? "نسبة من الرصيد المتاح وقت التنفيذ" : "نسبة من مبلغ الحدث"}</option><option value="fixed">مبلغ ثابت أحدده</option></select></label><label><span>{action.amountMode === "percent" ? "النسبة المئوية" : "المبلغ"}</span><input type="number" min="0" max={action.amountMode === "percent" ? "100" : undefined} value={action.value} onChange={(event) => updateAction(action.id, { value: event.target.value })} placeholder={action.amountMode === "percent" ? "مثال: 10" : "مثال: 500"} /></label></div>}
                     {action.type === "pay-bills" && <label><span>ما الذي تريد سداده؟</span><select value={action.message || "all"} onChange={(event) => updateAction(action.id, { message: event.target.value })}>{BILL_PAYMENT_TARGETS.map((target) => <option key={target.id} value={target.id}>{target.label}</option>)}</select></label>}
                     {action.type === "save" && <div className="field-help field-help--fixed">سيُحوّل تلقائيًا إلى حساب الادخار التجريبي.</div>}
-                    {["internal-transfer", "beneficiary-transfer", "split"].includes(action.type) && <label><span>إلى أين يذهب المبلغ؟</span><select className={!action.beneficiaryId ? "is-placeholder" : ""} value={action.beneficiaryId} onChange={(event) => updateAction(action.id, { beneficiaryId: event.target.value })}><option value="">اختر الحساب أو المستفيد</option>{beneficiaries.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
+                    {["internal-transfer", "beneficiary-transfer", "split"].includes(action.type) && <label><span>إلى أين يذهب المبلغ؟</span><select className={!action.beneficiaryId ? "is-placeholder" : ""} value={action.beneficiaryId} onChange={(event) => updateAction(action.id, { beneficiaryId: event.target.value })}><option value="">{action.type === "internal-transfer" ? "اختر أحد حساباتي" : action.type === "beneficiary-transfer" ? "اختر المستفيد" : "اختر الحساب أو المستفيد"}</option>{actionDestinations.map((item) => <option key={item.id} value={item.id}>{item.name} — {item.account}</option>)}</select></label>}
                     {["notify", "categorize"].includes(action.type) && <label><span>{action.type === "notify" ? "نص الإشعار" : "التصنيف"}</span><input value={action.message} onChange={(event) => updateAction(action.id, { message: event.target.value })} placeholder={action.type === "notify" ? "مثال: تم تنفيذ الأتمتة" : "مثال: اشتراكات"} /></label>}
 
                     <div className="action-block__tools"><button type="button" onClick={() => update({ actions: draft.actions.filter((item) => item.id !== action.id) })}><Trash2 /> حذف خطوة التنفيذ</button></div>

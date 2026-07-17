@@ -1031,7 +1031,7 @@ function App() {
               updateFinancialSnapshot={setFinancialSnapshot}
               connectLean={connectLean}
               leanConnectBusy={leanConnectBusy}
-              beneficiaries={financialSnapshot?.beneficiaries?.length ? financialSnapshot.beneficiaries : SANDBOX_BENEFICIARIES}
+              beneficiaries={SANDBOX_BENEFICIARIES}
               transfers={transfers}
               bills={bills}
               createTransfer={createTransfer}

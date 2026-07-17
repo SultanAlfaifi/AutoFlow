@@ -15,6 +15,7 @@ import {
   SANDBOX_BENEFICIARIES,
   TRIGGER_TYPES,
   createAiMetadata,
+  getActionDestinations,
   getAssistantQuickReplyMode,
   getAssistantQuickReplies,
   makeAction,
@@ -515,4 +516,22 @@ test("46. every trigger and execution action has a visible supported example", a
   const source = await readFile(new URL("../src/AutoFlowStudio.jsx", import.meta.url), "utf8");
   assert.match(source, /AUTOMATION_TRIGGER_EXAMPLES\[condition\.type\]/);
   assert.match(source, /AUTOMATION_ACTION_EXAMPLES\[action\.type\]/);
+});
+
+test("47. automation destinations keep trusted names and match the transfer type", async () => {
+  assert.deepEqual(
+    getActionDestinations("internal-transfer").map((item) => item.name),
+    ["حساب الادخار"],
+  );
+  assert.deepEqual(
+    getActionDestinations("beneficiary-transfer").map((item) => item.name),
+    ["سارة أحمد", "محمد علي", "حساب العائلة"],
+  );
+  assert.equal(getActionDestinations("split").length, SANDBOX_BENEFICIARIES.length);
+
+  const mainSource = await readFile(new URL("../src/main.jsx", import.meta.url), "utf8");
+  const studioSource = await readFile(new URL("../src/AutoFlowStudio.jsx", import.meta.url), "utf8");
+  assert.match(mainSource, /beneficiaries=\{SANDBOX_BENEFICIARIES\}/);
+  assert.match(studioSource, /getActionDestinations\(action\.type, beneficiaries\)/);
+  assert.match(studioSource, /\{item\.name\} — \{item\.account\}/);
 });

@@ -80,6 +80,16 @@ export const SANDBOX_BENEFICIARIES = [
   { id: "family", name: "حساب العائلة", account: "Plaid Checking •• 5540", kind: "beneficiary" },
 ];
 
+export function getActionDestinations(actionType, beneficiaries = SANDBOX_BENEFICIARIES) {
+  if (actionType === "internal-transfer") {
+    return beneficiaries.filter((item) => item.kind === "internal");
+  }
+  if (actionType === "beneficiary-transfer") {
+    return beneficiaries.filter((item) => item.kind === "beneficiary");
+  }
+  return beneficiaries;
+}
+
 export const DEFAULT_SAFETY = Object.freeze({
   minBalanceOn: false,
   minBalance: "",
