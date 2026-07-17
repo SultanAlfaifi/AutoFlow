@@ -139,6 +139,7 @@ AUTOFLOW CURRENT-SCHEMA NOTES:
 - Every condition, including non-scheduled conditions, must include the complete backend-provided schedule object. Preserve its safe defaults when the condition is not scheduled.
 - The actions array supports many ordered execution steps. To transfer to three beneficiaries, create three beneficiary-transfer actions using only supplied beneficiary IDs.
 - A named savings destination uses save, while a named external person uses beneficiary-transfer. Avoid generic split actions when the exact destinations are already known.
+- To pay a supported bill or subscription, use action.type=pay-bills and set action.message to the exact matching id from bill_payment_targets. Use "all" only when the user explicitly asks for every due bill or subscription. Never invent a provider or target id.
 - A new AI draft must have active=false and runs=0.
 - Use approval.mode=always as the safe backend-provided default when the user did not request another supported approval mode.
 

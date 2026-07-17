@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import AutoFlowStudio from "./AutoFlowStudio.jsx";
-import { SANDBOX_BENEFICIARIES } from "./automationContract.js";
+import { SANDBOX_BENEFICIARIES, SANDBOX_BILL_SERVICES } from "./automationContract.js";
 import { connectLeanAccount } from "./leanLink.js";
 import {
   ArrowLeftRight,
@@ -71,6 +71,27 @@ function loadLocalList(key) {
   } catch {
     return [];
   }
+}
+
+function loadSandboxBills() {
+  const existing = loadLocalList(BILLS_KEY);
+  const now = new Date();
+  const scenarios = SANDBOX_BILL_SERVICES.filter((service) => !existing.some((bill) => bill.serviceId === service.id)).map((service, index) => {
+    const dueDate = new Date(now);
+    dueDate.setDate(now.getDate() + index + 1);
+    return {
+      id: `sandbox-${service.id}`,
+      serviceId: service.id,
+      name: service.name,
+      amount: service.amount,
+      currency: "SAR",
+      dueDate: dueDate.toISOString().slice(0, 10),
+      status: "due",
+      kind: service.kind,
+      source: "سيناريو AutoFlow التجريبي",
+    };
+  });
+  return [...scenarios, ...existing];
 }
 
 const quickActions = [
@@ -869,7 +890,7 @@ function App() {
   const [financialSnapshot, setFinancialSnapshot] = useState(null);
   const [leanConnectBusy, setLeanConnectBusy] = useState(false);
   const [transfers, setTransfers] = useState(() => loadLocalList(TRANSFERS_KEY));
-  const [bills, setBills] = useState(() => loadLocalList(BILLS_KEY));
+  const [bills, setBills] = useState(loadSandboxBills);
   const financialDataLoaded = useRef(false);
   const [automations, setAutomations] = useState([
     {

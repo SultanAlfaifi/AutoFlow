@@ -40,6 +40,7 @@ import VoiceAssistant from "./VoiceAssistant.jsx";
 import {
   ACTION_TYPES,
   AUTOMATION_CATEGORIES,
+  BILL_PAYMENT_TARGETS,
   DEFAULT_SCHEDULE,
   SANDBOX_BENEFICIARIES,
   TRIGGER_TYPES,
@@ -130,7 +131,7 @@ const actionHelp = {
   "internal-transfer": "ينقل المبلغ بين حساباتك التجريبية.",
   "beneficiary-transfer": "يرسل المبلغ إلى مستفيد تختاره.",
   split: "يوجّه جزءاً من مبلغ الحدث إلى الوجهة المختارة.",
-  "pay-bills": "يسدد جميع الفواتير التي حالتها مستحقة.",
+  "pay-bills": "يسدد الفاتورة أو الاشتراك الذي تختاره عند استحقاقه.",
   notify: "يعرض لك رسالة بعد وصول الأتمتة إلى هذه الخطوة.",
   categorize: "يضع تصنيفاً واضحاً على العملية المالية.",
   pause: "يوقف الأتمتات الأخرى مؤقتاً عند تنفيذ هذه الخطوة.",
@@ -177,13 +178,16 @@ function actionLabel(action) {
 }
 
 function actionSummary(action) {
+  const billTarget = action.type === "pay-bills"
+    ? BILL_PAYMENT_TARGETS.find((item) => item.id === action.message)?.label
+    : "";
   const destination = action.type === "save"
     ? "حساب الادخار"
     : SANDBOX_BENEFICIARIES.find((item) => item.id === action.beneficiaryId)?.name;
   const amount = ["save", "internal-transfer", "beneficiary-transfer", "split"].includes(action.type) && action.value
     ? `${action.value}${action.amountMode === "percent" ? "%" : " ريال"}`
     : "";
-  return [actionLabel(action), amount, destination].filter(Boolean).join(" · ");
+  return [actionLabel(action), billTarget, amount, destination].filter(Boolean).join(" · ");
 }
 
 function actionSafetySummary(action) {
@@ -339,9 +343,10 @@ function ShortcutEditor({ workflow, beneficiaries, account, metadata, close, sav
                     </div>
                   </div>
                   {expanded && <div className="action-block__settings">
-                    <label><span>ماذا تنفذ هذه الخطوة؟</span><select className={!action.type ? "is-placeholder" : ""} value={action.type} onChange={(event) => updateAction(action.id, { type: event.target.value })}><option value="">اختر الإجراء</option>{actionTypes.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+                    <label><span>ماذا تنفذ هذه الخطوة؟</span><select className={!action.type ? "is-placeholder" : ""} value={action.type} onChange={(event) => updateAction(action.id, { type: event.target.value, ...(event.target.value === "pay-bills" ? { message: "all" } : {}) })}><option value="">اختر الإجراء</option>{actionTypes.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
                     {action.type && <small className="field-help">{actionHelp[action.type]}</small>}
                     {meta?.money && action.type !== "pay-bills" && <div className="two-fields"><label><span>كيف يُحسب المبلغ؟</span><select value={action.amountMode} onChange={(event) => updateAction(action.id, { amountMode: event.target.value })}><option value="percent">{usesScheduledBalance ? "نسبة من الرصيد المتاح وقت التنفيذ" : "نسبة من مبلغ الحدث"}</option><option value="fixed">مبلغ ثابت أحدده</option></select></label><label><span>{action.amountMode === "percent" ? "النسبة المئوية" : "المبلغ"}</span><input type="number" min="0" max={action.amountMode === "percent" ? "100" : undefined} value={action.value} onChange={(event) => updateAction(action.id, { value: event.target.value })} placeholder="اكتب القيمة" /></label></div>}
+                    {action.type === "pay-bills" && <label><span>ما الذي تريد سداده؟</span><select value={action.message || "all"} onChange={(event) => updateAction(action.id, { message: event.target.value })}>{BILL_PAYMENT_TARGETS.map((target) => <option key={target.id} value={target.id}>{target.label}</option>)}</select></label>}
                     {action.type === "save" && <div className="field-help field-help--fixed">سيُحوّل تلقائيًا إلى حساب الادخار التجريبي.</div>}
                     {["internal-transfer", "beneficiary-transfer", "split"].includes(action.type) && <label><span>إلى أين يذهب المبلغ؟</span><select className={!action.beneficiaryId ? "is-placeholder" : ""} value={action.beneficiaryId} onChange={(event) => updateAction(action.id, { beneficiaryId: event.target.value })}><option value="">اختر الحساب أو المستفيد</option>{beneficiaries.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
                     {["notify", "categorize"].includes(action.type) && <label><span>{action.type === "notify" ? "نص الإشعار" : "التصنيف"}</span><input value={action.message} onChange={(event) => updateAction(action.id, { message: event.target.value })} placeholder={action.type === "notify" ? "اكتب الرسالة التي ستظهر" : "اكتب اسم التصنيف"} /></label>}
@@ -664,14 +669,16 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
       createTransfer({ id: `transfer-${Date.now()}`, workflowId: run.workflowId, beneficiaryId: beneficiary.id, beneficiaryName: beneficiary.name, amount, currency, date: today, status: "completed", plaidRecorded, note: run.workflowTitle });
       addHistory("success", "تم التحويل افتراضيًا", `${formatMoney(amount, currency)} إلى ${beneficiary.name}`);
     } else if (action.type === "pay-bills") {
-      const due = bills.filter((bill) => bill.status === "due");
-      if (run.primaryFact?.bill && !due.some((bill) => bill.id === run.primaryFact.bill.id)) due.push(run.primaryFact.bill);
+      const targetId = action.message || "all";
+      const due = bills.filter((bill) => bill.status === "due" && (targetId === "all" || bill.serviceId === targetId));
+      if (run.primaryFact?.bill && (targetId === "all" || run.primaryFact.bill.serviceId === targetId) && !due.some((bill) => bill.id === run.primaryFact.bill.id)) due.push(run.primaryFact.bill);
       const total = due.reduce((sum, bill) => sum + bill.amount, 0);
-      if (!due.length) addHistory("skipped", "لا توجد مستحقات", `${run.workflowTitle} لم يجد فاتورة مستحقة`);
+      const targetLabel = BILL_PAYMENT_TARGETS.find((target) => target.id === targetId)?.label || "المستحقات";
+      if (!due.length) addHistory("skipped", "لا توجد مستحقات", `${run.workflowTitle} لم يجد مستحقًا لـ ${targetLabel}`);
       else {
         payBills(due.map((bill) => bill.id));
-        await recordSandboxAction({ action: "record-execution", amount: total, currency, description: "AutoFlow - Bill Payment" });
-        addHistory("success", "تم سداد المستحقات افتراضيًا", `${due.length} فاتورة · ${formatMoney(total, currency)}`);
+        await recordSandboxAction({ action: "record-execution", amount: total, currency, description: `AutoFlow - ${targetLabel}` });
+        addHistory("success", "تم السداد افتراضيًا", `${targetLabel} · ${formatMoney(total, currency)}`);
       }
     } else if (action.type === "notify") addHistory("success", "تم إرسال إشعار", action.message);
     else if (action.type === "categorize") addHistory("success", "تم تصنيف العملية", action.message || "مصروف تلقائي");
@@ -727,7 +734,7 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
 
   const fireEvent = async (eventMeta) => {
     setBusyEvent(eventMeta.id);
-    const bill = eventMeta.id === "bill-due" ? { id: `bill-${Date.now()}`, name: "فاتورة الكهرباء", amount: eventMeta.amount, currency, dueDate: today, status: "due", source: "بيئة AutoFlow التجريبية" } : null;
+    const bill = eventMeta.id === "bill-due" ? { id: `bill-${Date.now()}`, serviceId: "electricity", name: "فاتورة الكهرباء", amount: eventMeta.amount, currency, dueDate: today, status: "due", source: "بيئة AutoFlow التجريبية" } : null;
     const event = { id: `event-${eventMeta.id}-${Date.now()}`, type: eventMeta.id, amount: eventMeta.amount, merchant: eventMeta.description, label: eventMeta.label, bill, createdAt: new Date().toISOString() };
     try {
       if (!eventMeta.localOnly) {
@@ -871,7 +878,7 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
   </button>;
 
   return <div className="shortcut-studio">
-    <header className="shortcut-studio__header"><div><span className="shortcut-logo"><Workflow /></span><div><h1>AutoFlow</h1><span><i /> جاهز للعمل</span></div></div><button type="button" onClick={newWorkflow}><Plus /> أتمتة جديدة</button></header>
+    <header className="shortcut-studio__header"><div><span className="shortcut-logo"><Workflow /></span><div><h1>AutoFlow</h1><span><i /> جاهز للعمل</span></div></div></header>
     <section className={`financial-provider-card financial-provider-card--${provider.status}`} aria-label="مصدر البيانات المالية">
       <span><Landmark /></span>
       <div>
@@ -891,6 +898,11 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
         ? <button type="button" onClick={refreshFinancialData}>تحديث</button>
         : ["connection_required", "fallback"].includes(provider.status) && <button type="button" onClick={connectLean} disabled={leanConnectBusy}>{leanConnectBusy ? "جارٍ الفتح…" : provider.status === "fallback" ? "إعادة الربط" : "ربط الحساب"}</button>}
     </section>
+    <button className="create-automation-primary" type="button" onClick={newWorkflow}>
+      <span><Plus /></span>
+      <span><strong>إنشاء أتمتة جديدة</strong><small>اختر متى تبدأ وماذا تنفّذ</small></span>
+      <ChevronLeft />
+    </button>
 
     {!workflows.length ? <section className="automation-empty-state">
       <span className="automation-empty-state__icon"><Sparkles /></span>

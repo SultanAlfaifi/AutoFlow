@@ -5,8 +5,10 @@ import {
   AI_SAFE_DEFAULTS,
   ASSISTANT_RESPONSE_SCHEMA,
   AUTOMATION_JSON_SCHEMA,
+  BILL_PAYMENT_TARGETS,
   DEFAULT_SCHEDULE,
   DEFAULT_SAFETY,
+  SANDBOX_BILL_SERVICES,
   SANDBOX_BENEFICIARIES,
   createAiMetadata,
   getAssistantQuickReplyMode,
@@ -450,4 +452,45 @@ test("41. the assistant and editor describe the scheduled percentage base", asyn
   const source = await readFile(new URL("../src/AutoFlowStudio.jsx", import.meta.url), "utf8");
   assert.match(prompt, /percentage of the connected account's available balance at execution time/);
   assert.match(source, /نسبة من الرصيد المتاح وقت التنفيذ/);
+});
+
+test("42. supported bill and subscription targets are shared with AI and manual creation", async () => {
+  const targetIds = BILL_PAYMENT_TARGETS.map((target) => target.id);
+  assert.deepEqual(targetIds, ["all", "electricity", "water", "xbox", "chatgpt", "amazon-prime"]);
+  assert.deepEqual(SANDBOX_BILL_SERVICES.map((service) => service.id), targetIds.slice(1));
+  assert.deepEqual(buildModelContext(assistantPayload("سدّد اشتراك ChatGPT")).bill_payment_targets.map((target) => target.id), targetIds);
+
+  const source = await readFile(new URL("../src/AutoFlowStudio.jsx", import.meta.url), "utf8");
+  assert.match(source, /BILL_PAYMENT_TARGETS\.map/);
+  assert.match(source, /ما الذي تريد سداده؟/);
+});
+
+test("43. bill payment drafts require a trusted target and old all-bills actions migrate safely", () => {
+  const targeted = validDraft({
+    actions: [{ ...validDraft().actions[0], type: "pay-bills", value: "", amountMode: "fixed", message: "chatgpt" }],
+  });
+  assert.deepEqual(validateAutomation(targeted, { source: "ai" }), []);
+
+  const invented = structuredClone(targeted);
+  invented.actions[0].message = "invented-provider";
+  assert.ok(validateAutomation(invented, { source: "ai" }).some((issue) => issue.code === "invalid_bill_target"));
+
+  const legacy = structuredClone(targeted);
+  legacy.actions[0].message = "";
+  assert.equal(normalizeWorkflowShape(legacy).actions[0].message, "all");
+});
+
+test("44. clear bill scenarios create a safe local AI draft without an OpenAI key", async () => {
+  let openAiCalls = 0;
+  const result = await generateAssistantResult(assistantPayload("سدّد اشتراك ChatGPT عند استحقاقه"), async () => {
+    openAiCalls += 1;
+    throw new Error("The trusted local scenario should not call OpenAI");
+  });
+  assert.equal(openAiCalls, 0);
+  assert.equal(result.action, "create_draft");
+  assert.equal(result.automation.active, false);
+  assert.equal(result.automation.conditions[0].type, "subscription");
+  assert.equal(result.automation.actions[0].type, "pay-bills");
+  assert.equal(result.automation.actions[0].message, "chatgpt");
+  assert.equal(result.automation.actions[0].approval.mode, "always");
 });

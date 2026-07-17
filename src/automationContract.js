@@ -34,6 +34,23 @@ export const AUTOMATION_COLORS = ["gray", "coral", "teal", "green", "gold", "vio
 export const AUTOMATION_ICONS = ["sparkles", "wallet", "receipt", "shield", "bell", "calendar"];
 export const AUTOMATION_CATEGORIES = ["شخصية", "ادخار", "مدفوعات", "تحويلات", "حماية الرصيد", "تنظيم مالي"];
 
+export const BILL_PAYMENT_TARGETS = [
+  { id: "all", label: "كل الفواتير والاشتراكات المستحقة" },
+  { id: "electricity", label: "الكهرباء" },
+  { id: "water", label: "المياه" },
+  { id: "xbox", label: "Xbox Game Pass" },
+  { id: "chatgpt", label: "ChatGPT Plus" },
+  { id: "amazon-prime", label: "Amazon Prime" },
+];
+
+export const SANDBOX_BILL_SERVICES = [
+  { id: "electricity", name: "فاتورة الكهرباء", amount: 286.4, kind: "utility" },
+  { id: "water", name: "فاتورة المياه", amount: 95.75, kind: "utility" },
+  { id: "xbox", name: "Xbox Game Pass", amount: 39.99, kind: "subscription" },
+  { id: "chatgpt", name: "ChatGPT Plus", amount: 75, kind: "subscription" },
+  { id: "amazon-prime", name: "Amazon Prime", amount: 16, kind: "subscription" },
+];
+
 export const SANDBOX_BENEFICIARIES = [
   { id: "plaid-savings", name: "حساب الادخار", account: "Plaid Savings •• 4321", kind: "internal" },
   { id: "sara", name: "سارة أحمد", account: "Plaid Checking •• 1188", kind: "beneficiary" },
@@ -333,6 +350,7 @@ export function validateAutomation(automation, options = {}) {
     if (explicitDestination && !action.beneficiaryId) issues.push(issue(`${path}.beneficiaryId`, "required_beneficiary", `${prefix}: اختر الحساب أو المستفيد`));
     if (transferAction && !positiveNumber(action.value)) issues.push(issue(`${path}.value`, "required_financial_value", `${prefix}: اكتب المبلغ أو النسبة`));
     if (["notify", "categorize"].includes(action.type) && !action.message.trim()) issues.push(issue(`${path}.message`, "required", `${prefix}: اكتب النص`));
+    if (action.type === "pay-bills" && !BILL_PAYMENT_TARGETS.some((target) => target.id === action.message)) issues.push(issue(`${path}.message`, "invalid_bill_target", `${prefix}: اختر الفاتورة أو الاشتراك المراد سداده`, "structure"));
     if (!action.approval.mode) issues.push(issue(`${path}.approval.mode`, "required", `${prefix}: اختر طريقة الموافقة`));
     if (action.approval.mode === "above" && !positiveNumber(action.approval.threshold)) issues.push(issue(`${path}.approval.threshold`, "required_financial_value", `${prefix}: اكتب مبلغ الموافقة`));
 
@@ -410,6 +428,10 @@ export function normalizeWorkflowShape(workflow) {
         weekdays: Array.isArray(condition?.schedule?.weekdays) ? condition.schedule.weekdays : [],
       },
     })) : workflow.conditions,
+    actions: Array.isArray(workflow.actions) ? workflow.actions.map((action) => ({
+      ...action,
+      message: action?.type === "pay-bills" && !action.message ? "all" : action.message,
+    })) : workflow.actions,
   };
 }
 

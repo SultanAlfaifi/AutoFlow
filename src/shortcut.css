@@ -25,6 +25,34 @@
 .financial-provider-card--syncing { border-color: #bddce2; background: #eff8fa; }
 .financial-provider-card--fallback { border-color: #ebd5aa; background: #fff8e9; }
 
+.create-automation-primary {
+  width: 100%;
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 13px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 14px;
+  color: #073b4b;
+  background: linear-gradient(135deg, #ff9586, #ff8175);
+  box-shadow: 0 9px 20px rgba(223, 94, 80, .23);
+  text-align: right;
+  cursor: pointer;
+}
+.create-automation-primary > span:first-child { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 11px; background: rgba(255, 255, 255, .55); }
+.create-automation-primary svg { width: 20px; }
+.create-automation-primary > span:nth-child(2) { min-width: 0; }
+.create-automation-primary strong, .create-automation-primary small { display: block; }
+.create-automation-primary strong { font-size: 13px; }
+.create-automation-primary small { margin-top: 2px; color: #315b64; font-size: 9px; }
+.create-automation-primary > svg { width: 16px; }
+.create-automation-primary:hover { transform: translateY(-1px); box-shadow: 0 11px 24px rgba(223, 94, 80, .28); }
+.create-automation-primary:active { transform: scale(.99); }
+.create-automation-primary:focus-visible { outline: 3px solid rgba(239, 121, 95, .4); outline-offset: 3px; }
+
 .automation-empty-state { min-height: 430px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 28px 20px; border: 1px solid #ddd6d0; border-radius: 12px; text-align: center; background: white; animation: shortcut-fade-up .35s ease both; }
 .automation-empty-state__icon { width: 60px; height: 60px; display: grid; place-items: center; margin-bottom: 13px; border-radius: 16px; color: #b7433b; background: #ffe5e1; }
 .automation-empty-state__icon svg { width: 28px; }
@@ -784,6 +812,7 @@
 [data-theme="dark"] .voice-simple-start > h3 { color: #eaf3f4; }
 [data-theme="dark"] .financial-provider-card { border-color: #31545e; color: #eaf3f4; background: #073543; }
 [data-theme="dark"] .financial-provider-card strong { color: #eaf3f4; }
+[data-theme="dark"] .create-automation-primary { color: #073b4b; }
 
 @media (max-width: 430px) {
   .assistant-launcher { right: 12px; bottom: 86px; }

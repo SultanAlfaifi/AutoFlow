@@ -4,6 +4,8 @@ import {
   ASSISTANT_RESPONSE_SCHEMA,
   AUTOMATION_JSON_SCHEMA,
   AUTOMATION_SCHEMA_VERSION,
+  BILL_PAYMENT_TARGETS,
+  DEFAULT_SCHEDULE,
   OPERATOR_TYPES,
   SANDBOX_BENEFICIARIES,
   TRIGGER_TYPES,
@@ -222,6 +224,7 @@ export function buildModelContext(payload) {
         : id === "subscription" ? ["operator", "value", "merchant"] : ["operator", "value"],
     })),
     available_actions: ACTION_TYPES.map((id) => ({ id, label: actionDescriptions[id], repeatable: true })),
+    bill_payment_targets: BILL_PAYMENT_TARGETS.map((target) => ({ id: target.id, label: target.label })),
     supports_multiple_actions: true,
     multi_beneficiary_rule: "Use one ordered action object per selected beneficiary or destination. Multiple transfer actions in one automation are supported.",
     action_selection_rules: {
@@ -230,6 +233,7 @@ export function buildModelContext(payload) {
       named_beneficiary: "beneficiary-transfer",
       explicit_multiple_destinations: "one specific action per destination; do not use generic split actions",
       equal_distribution: "divide 100 percent by the number of selected destinations; total must not exceed 100 percent",
+      named_bill_or_subscription: "use pay-bills and put the exact supplied bill_payment_targets id in action.message",
     },
     financial_safety_policy: {
       fixed_transfer: "enable maxAmountOn with maxAmount equal to the fixed action value",
@@ -297,6 +301,61 @@ function enforceDraftSecurity(envelope, currentDraft) {
       ...envelope.automation,
       active: false,
       runs: currentDraft?.runs || 0,
+    },
+  };
+}
+
+function buildLocalBillScenario(message, context) {
+  if (!/(?:سدد|سدّد|سداد|ادفع|دفع|pay)/i.test(message)) return null;
+  const normalized = message.toLowerCase();
+  const aliases = [
+    { id: "electricity", pattern: /كهرب|electric/ },
+    { id: "water", pattern: /مياه|موية|مويه|water/ },
+    { id: "xbox", pattern: /xbox|إكس\s*بوكس|اكس\s*بوكس|game\s*pass/ },
+    { id: "chatgpt", pattern: /chat\s*gpt|شات\s*جي\s*بي\s*تي/ },
+    { id: "amazon-prime", pattern: /amazon\s*prime|أمازون\s*برايم|امازون\s*برايم/ },
+  ];
+  const matched = aliases.find(({ pattern }) => pattern.test(normalized));
+  const targetId = matched?.id || (/(?:كل|جميع).*(?:فاتور|اشتراك|مستحق)/i.test(message) ? "all" : null);
+  if (!targetId) return null;
+  const target = BILL_PAYMENT_TARGETS.find((item) => item.id === targetId);
+  const service = targetId === "all" ? null : target;
+  const isUtility = ["electricity", "water"].includes(targetId);
+  const conditionType = isUtility || targetId === "all" ? "bill-due" : "subscription";
+  const conditionId = context.safe_defaults.draft_ids.condition_ids[0];
+  const actionId = context.safe_defaults.draft_ids.action_ids[0];
+  return {
+    action: "create_draft",
+    assistant_message: `جهزت لك مسودة لسداد ${target.label} عند الاستحقاق. راجعها قبل النشر، وستبقى الموافقة مطلوبة قبل السداد.`,
+    missing_fields: [],
+    automation: {
+      id: context.safe_defaults.draft_ids.workflow_id,
+      name: `سداد ${target.label}`,
+      category: "مدفوعات",
+      color: "coral",
+      icon: "receipt",
+      active: false,
+      match: "all",
+      runs: 0,
+      conditions: [{
+        id: conditionId,
+        type: conditionType,
+        joinWith: "and",
+        operator: "any",
+        value: "",
+        merchant: service?.label || "",
+        schedule: { ...DEFAULT_SCHEDULE, weekdays: [] },
+      }],
+      actions: [{
+        id: actionId,
+        type: "pay-bills",
+        amountMode: "fixed",
+        value: "",
+        beneficiaryId: "",
+        message: targetId,
+        safety: { ...AI_SAFE_DEFAULTS.action.safety },
+        approval: { mode: "always", threshold: "" },
+      }],
     },
   };
 }
@@ -378,20 +437,24 @@ export async function generateAssistantResult(payload, fetchImpl = fetch) {
   }
 
   const context = buildModelContext(payload);
-  let openAIResponse = await callOpenAI(buildOpenAIRequest(context), fetchImpl);
-  let envelope;
+  let envelope = buildLocalBillScenario(message, context);
   let issues;
-  try {
-    envelope = enforceDraftSecurity(JSON.parse(extractResponseText(openAIResponse)), context.current_draft);
+  if (envelope) {
     issues = validateAssistantEnvelope(envelope, { beneficiaries: SANDBOX_BENEFICIARIES, requireZeroRuns: !context.current_draft });
-  } catch (error) {
-    issues = [{ path: "response", message: error.message, kind: "structure" }];
-  }
+  } else {
+    let openAIResponse = await callOpenAI(buildOpenAIRequest(context), fetchImpl);
+    try {
+      envelope = enforceDraftSecurity(JSON.parse(extractResponseText(openAIResponse)), context.current_draft);
+      issues = validateAssistantEnvelope(envelope, { beneficiaries: SANDBOX_BENEFICIARIES, requireZeroRuns: !context.current_draft });
+    } catch (error) {
+      issues = [{ path: "response", message: error.message, kind: "structure" }];
+    }
 
-  if (issues.length && issues.every((item) => item.kind === "structure")) {
-    openAIResponse = await callOpenAI(buildOpenAIRequest(context, issues), fetchImpl);
-    envelope = enforceDraftSecurity(JSON.parse(extractResponseText(openAIResponse)), context.current_draft);
-    issues = validateAssistantEnvelope(envelope, { beneficiaries: SANDBOX_BENEFICIARIES, requireZeroRuns: !context.current_draft });
+    if (issues.length && issues.every((item) => item.kind === "structure")) {
+      openAIResponse = await callOpenAI(buildOpenAIRequest(context, issues), fetchImpl);
+      envelope = enforceDraftSecurity(JSON.parse(extractResponseText(openAIResponse)), context.current_draft);
+      issues = validateAssistantEnvelope(envelope, { beneficiaries: SANDBOX_BENEFICIARIES, requireZeroRuns: !context.current_draft });
+    }
   }
   if (issues.length) {
     const error = new Error("تعذر اعتماد مخرجات النموذج لأنها لم تجتز تحقق AutoFlow");
