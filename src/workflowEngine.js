@@ -105,8 +105,11 @@ export function evaluateWorkflow(workflow, eventFacts, context, processedSignatu
   };
 }
 
-export function resolveActionAmount(action, run) {
+export function resolveActionAmount(action, run, availableBalance = null) {
   if (["notify", "pause", "categorize"].includes(action.type)) return 0;
+  if (action.amountMode === "balance-percent") {
+    return Number(availableBalance ?? run.availableBalance ?? 0) * (Number(action.value || 0) / 100);
+  }
   const baseAmount = Number(run.percentageBase ?? run.primaryFact?.amount ?? 0);
   return action.amountMode === "percent"
     ? baseAmount * (Number(action.value || 0) / 100)
@@ -126,12 +129,12 @@ export function dueBillsForAction(action, bills = [], primaryFact = null) {
   return due;
 }
 
-export function resolveExecutionAmount(action, run, bills = []) {
+export function resolveExecutionAmount(action, run, bills = [], availableBalance = null) {
   if (action?.type === "pay-bills") {
     return dueBillsForAction(action, bills, run?.primaryFact)
       .reduce((sum, bill) => sum + Number(bill.amount || 0), 0);
   }
-  return resolveActionAmount(action, run);
+  return resolveActionAmount(action, run, availableBalance);
 }
 
 export function evaluateSafety(action, amount, context) {

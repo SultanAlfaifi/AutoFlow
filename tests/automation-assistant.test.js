@@ -615,9 +615,12 @@ test("51. subscription test scenarios use the same trusted services as the manua
 
 test("52. sequential financial actions reserve the projected outflow before checking the next step", async () => {
   const studioSource = await readFile(new URL("../src/AutoFlowStudio.jsx", import.meta.url), "utf8");
-  assert.match(studioSource, /balance: Math\.max\(0, balance - projectedOutflow\)/);
+  assert.match(studioSource, /const availableBalance = Math\.max\(0, balance - projectedOutflow\)/);
+  assert.match(studioSource, /balance: availableBalance/);
   assert.match(studioSource, /todayTransfers: todayTransfers \+ projectedOutflow/);
   assert.match(studioSource, /projectedOutflow \+= amount/);
+  assert.match(studioSource, /projectedOutflowBefore: projectedOutflow/);
+  assert.match(studioSource, /Number\(pendingApproval\.projectedOutflowBefore \|\| 0\) \+ approvedOutflow/);
   assert.match(studioSource, /if \(status === "pending"\) break/);
 });
 
@@ -712,7 +715,7 @@ test("58. compound AI requests preserve every ordered action and explicit approv
     ...validDraft().actions[0],
     id: "action-test-conversation-3",
     type: "save",
-    amountMode: "percent",
+    amountMode: "balance-percent",
     value: "10",
     beneficiaryId: "",
     message: "",
@@ -748,6 +751,7 @@ test("58. compound AI requests preserve every ordered action and explicit approv
     assert.deepEqual(result.automation.actions.map((action) => action.approval.mode), ["always", "always", "always"]);
     assert.equal(result.automation.actions[1].beneficiaryId, "worker");
     assert.equal(result.automation.actions[2].safety.minBalance, "5000");
+    assert.equal(result.automation.actions[2].amountMode, "balance-percent");
 
     const updateCapture = [];
     const updated = await generateAssistantResult({
@@ -759,4 +763,12 @@ test("58. compound AI requests preserve every ordered action and explicit approv
   } finally {
     if (oldKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = oldKey;
   }
+});
+
+test("59. balance-percent uses the projected balance remaining at its ordered step", () => {
+  const action = { ...validDraft().actions[0], amountMode: "balance-percent", value: "10" };
+  const run = { primaryFact: { amount: 12000 }, percentageBase: 12000 };
+  assert.equal(resolveExecutionAmount(action, run, [], 8500), 850);
+  assert.equal(resolveExecutionAmount(action, run, [], 5000), 500);
+  assert.deepEqual(validateAutomation(validDraft({ actions: [action] }), { source: "ai" }), []);
 });

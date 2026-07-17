@@ -248,6 +248,7 @@ export function buildModelContext(payload) {
       explicit_multiple_destinations: "one specific action per destination; do not use generic split actions",
       equal_distribution: "divide 100 percent by the number of selected destinations; total must not exceed 100 percent",
       named_bill_or_subscription: "use pay-bills and put the exact supplied bill_payment_targets id in action.message",
+      percentage_of_remaining_balance: "use amountMode balance-percent when the user explicitly refers to the account balance remaining at that ordered step",
     },
     financial_safety_policy: {
       fixed_transfer: "enable maxAmountOn with maxAmount equal to the fixed action value",
@@ -327,6 +328,17 @@ function validateRequestCompleteness(envelope, message, currentDraft = null) {
         });
       }
     });
+  }
+  if (/(?:بقي|تبقى|الرصيد)[\s\S]{0,100}(?:حو[ّ]?ل|تحويل)[\s\S]{0,35}(?:%|٪|بالمئة|في\s+المئة)/iu.test(message)) {
+    const savingsIndex = expected.indexOf("save");
+    if (savingsIndex >= 0 && actual[savingsIndex]?.amountMode !== "balance-percent") {
+      issues.push({
+        path: `automation.actions[${savingsIndex}].amountMode`,
+        code: "remaining_balance_base_omitted",
+        message: "طلب المستخدم نسبة من الرصيد المتبقي عند هذه الخطوة؛ استخدم balance-percent بدل نسبة مبلغ الحدث.",
+        kind: "structure",
+      });
+    }
   }
   return issues;
 }

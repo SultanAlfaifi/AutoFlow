@@ -46,7 +46,7 @@ export const AUTOMATION_ACTION_EXAMPLES = Object.freeze({
 
 export const OPERATOR_TYPES = ["any", "gte", "lte"];
 export const JOIN_TYPES = ["and", "or"];
-export const AMOUNT_MODES = ["percent", "fixed"];
+export const AMOUNT_MODES = ["percent", "balance-percent", "fixed"];
 export const APPROVAL_MODES = ["auto", "always", "above"];
 export const MATCH_MODES = ["all", "any"];
 export const SCHEDULE_MODES = ["once", "daily", "weekly", "monthly"];
@@ -386,7 +386,7 @@ export function validateAutomation(automation, options = {}) {
 
     if (!AMOUNT_MODES.includes(action.amountMode)) issues.push(issue(`${path}.amountMode`, "invalid_enum", "طريقة حساب المبلغ غير مدعومة", "structure"));
     if (!APPROVAL_MODES.includes(action.approval.mode)) issues.push(issue(`${path}.approval.mode`, "invalid_enum", "طريقة الموافقة غير مدعومة", "structure"));
-    if (action.amountMode === "percent" && transferAction && Number(action.value) > 100) issues.push(issue(`${path}.value`, "invalid_percentage", "النسبة يجب ألا تتجاوز 100%"));
+    if (["percent", "balance-percent"].includes(action.amountMode) && transferAction && Number(action.value) > 100) issues.push(issue(`${path}.value`, "invalid_percentage", "النسبة يجب ألا تتجاوز 100%"));
     if (action.type === "save" && action.beneficiaryId !== "") issues.push(issue(`${path}.beneficiaryId`, "invalid_fixed_destination", "إجراء الادخار يستخدم وجهته الثابتة ولا يقبل معرفًا إضافيًا", "security"));
     if (explicitDestination && action.beneficiaryId && !beneficiaryById.has(action.beneficiaryId)) issues.push(issue(`${path}.beneficiaryId`, "unknown_beneficiary", "الحساب أو المستفيد غير موجود ضمن خيارات المستخدم", "security"));
     if (action.type === "internal-transfer" && action.beneficiaryId && beneficiaryById.get(action.beneficiaryId)?.kind !== "internal") issues.push(issue(`${path}.beneficiaryId`, "invalid_internal_destination", "الوجهة ليست حسابًا داخليًا صالحًا", "security"));
@@ -409,7 +409,7 @@ export function validateAutomation(automation, options = {}) {
 
   if (Array.isArray(automation.actions)) {
     const percentageTotal = automation.actions
-      .filter((action) => ["save", "internal-transfer", "beneficiary-transfer", "split"].includes(action.type) && action.amountMode === "percent")
+      .filter((action) => ["save", "internal-transfer", "beneficiary-transfer", "split"].includes(action.type) && ["percent", "balance-percent"].includes(action.amountMode))
       .reduce((total, action) => total + Number(action.value || 0), 0);
     if (percentageTotal > 100.0001) issues.push(issue("actions", "percentage_total_exceeded", "مجموع نسب التحويل لا يمكن أن يتجاوز 100%", "security"));
   }

@@ -231,7 +231,7 @@ function actionSummary(action) {
     ? "حساب الادخار"
     : SANDBOX_BENEFICIARIES.find((item) => item.id === action.beneficiaryId)?.name;
   const amount = ["save", "internal-transfer", "beneficiary-transfer", "split"].includes(action.type) && action.value
-    ? `${action.value}${action.amountMode === "percent" ? "%" : " ريال"}`
+    ? `${action.value}${["percent", "balance-percent"].includes(action.amountMode) ? "%" : " ريال"}`
     : "";
   return [actionLabel(action), billTarget, amount, destination].filter(Boolean).join(" · ");
 }
@@ -398,7 +398,7 @@ function ShortcutEditor({ workflow, beneficiaries, account, metadata, isNew, clo
                     <label><span>ماذا تنفذ هذه الخطوة؟</span><select className={!action.type ? "is-placeholder" : ""} value={action.type} onChange={(event) => updateAction(action.id, { type: event.target.value, beneficiaryId: "", ...(event.target.value === "pay-bills" ? { message: "all" } : {}) })}><option value="">اختر الإجراء</option>{actionTypes.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
                     {action.type && <small className="field-help">{actionHelp[action.type]}</small>}
                     {action.type && <small className="field-example"><b>مثال</b><span>{AUTOMATION_ACTION_EXAMPLES[action.type]}</span></small>}
-                    {meta?.money && action.type !== "pay-bills" && <div className="two-fields"><label><span>كيف يُحسب المبلغ؟</span><select value={action.amountMode} onChange={(event) => updateAction(action.id, { amountMode: event.target.value })}><option value="percent">{usesScheduledBalance ? "نسبة من الرصيد المتاح وقت التنفيذ" : "نسبة من مبلغ الحدث"}</option><option value="fixed">مبلغ ثابت أحدده</option></select></label><label><span>{action.amountMode === "percent" ? "النسبة المئوية" : "المبلغ"}</span><input type="number" min="0" max={action.amountMode === "percent" ? "100" : undefined} value={action.value} onChange={(event) => updateAction(action.id, { value: event.target.value })} placeholder={action.amountMode === "percent" ? "مثال: 10" : "مثال: 500"} /></label></div>}
+                    {meta?.money && action.type !== "pay-bills" && <div className="two-fields"><label><span>كيف يُحسب المبلغ؟</span><select value={action.amountMode} onChange={(event) => updateAction(action.id, { amountMode: event.target.value })}><option value="percent">{usesScheduledBalance ? "نسبة من الرصيد المتاح وقت التنفيذ" : "نسبة من مبلغ الحدث"}</option><option value="balance-percent">نسبة من الرصيد المتبقي وقت هذه الخطوة</option><option value="fixed">مبلغ ثابت أحدده</option></select></label><label><span>{["percent", "balance-percent"].includes(action.amountMode) ? "النسبة المئوية" : "المبلغ"}</span><input type="number" min="0" max={["percent", "balance-percent"].includes(action.amountMode) ? "100" : undefined} value={action.value} onChange={(event) => updateAction(action.id, { value: event.target.value })} placeholder={["percent", "balance-percent"].includes(action.amountMode) ? "مثال: 10" : "مثال: 500"} /></label></div>}
                     {action.type === "pay-bills" && <label><span>ما الذي تريد سداده؟</span><select value={action.message || "all"} onChange={(event) => updateAction(action.id, { message: event.target.value })}>{BILL_PAYMENT_TARGETS.map((target) => <option key={target.id} value={target.id}>{target.label}</option>)}</select></label>}
                     {action.type === "save" && <div className="field-help field-help--fixed">سيُحوّل تلقائيًا إلى حساب الادخار التجريبي.</div>}
                     {["internal-transfer", "beneficiary-transfer", "split"].includes(action.type) && <label><span>إلى أين يذهب المبلغ؟</span><select className={!action.beneficiaryId ? "is-placeholder" : ""} value={action.beneficiaryId} onChange={(event) => updateAction(action.id, { beneficiaryId: event.target.value })}><option value="">{action.type === "internal-transfer" ? "اختر أحد حساباتي" : action.type === "beneficiary-transfer" ? "اختر المستفيد" : "اختر الحساب أو المستفيد"}</option>{actionDestinations.map((item) => <option key={item.id} value={item.id}>{item.name} — {item.account}</option>)}</select></label>}
@@ -765,8 +765,8 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
     }
   };
 
-  const executeAction = async (run, action) => {
-    const amount = resolveExecutionAmount(action, run, bills);
+  const executeAction = async (run, action, resolvedAmount = null) => {
+    const amount = resolvedAmount ?? resolveExecutionAmount(action, run, bills, balance);
     if (["save", "internal-transfer", "beneficiary-transfer", "split"].includes(action.type)) {
       if (!Number.isFinite(amount) || amount <= 0) throw new Error("مبلغ التحويل غير صالح");
       const beneficiary = action.type === "save"
@@ -796,13 +796,14 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
     let projectedOutflow = segmentOutflow;
     for (let index = startIndex; index < run.actions.length; index += 1) {
       const action = run.actions[index];
-      const amount = resolveExecutionAmount(action, run, bills);
+      const availableBalance = Math.max(0, balance - projectedOutflow);
+      const amount = resolveExecutionAmount(action, run, bills, availableBalance);
       if (action.type === "pay-bills" && amount <= 0) {
-        await executeAction(run, action);
+        await executeAction(run, action, amount);
         continue;
       }
       const failures = evaluateSafety(action, amount, {
-        balance: Math.max(0, balance - projectedOutflow),
+        balance: availableBalance,
         todayTransfers: todayTransfers + projectedOutflow,
         timezone: "Asia/Riyadh",
         now: new Date(),
@@ -812,12 +813,19 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
         continue;
       }
       if (actionNeedsApproval(action, amount)) {
-        setApprovalQueue((queue) => [...queue, { id: `approval-${Date.now()}-${index}`, run, action, actionIndex: index, amount }]);
+        setApprovalQueue((queue) => [...queue, {
+          id: `approval-${Date.now()}-${index}`,
+          run,
+          action,
+          actionIndex: index,
+          amount,
+          projectedOutflowBefore: projectedOutflow,
+        }]);
         addHistory("approval", "بانتظار الموافقة", `${run.workflowTitle} · ${actionLabel(action)}`);
         return "pending";
       }
       try {
-        await executeAction(run, action);
+        await executeAction(run, action, amount);
         if (amount > 0 && ["save", "internal-transfer", "beneficiary-transfer", "split", "pay-bills"].includes(action.type)) {
           projectedOutflow += amount;
         }
@@ -894,12 +902,13 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
     if (!pendingApproval) return;
     setApprovalQueue((queue) => queue.slice(1));
     try {
-      await executeAction(pendingApproval.run, pendingApproval.action);
+      await executeAction(pendingApproval.run, pendingApproval.action, pendingApproval.amount);
       const approvedOutflow = pendingApproval.amount > 0
         && ["save", "internal-transfer", "beneficiary-transfer", "split", "pay-bills"].includes(pendingApproval.action.type)
         ? pendingApproval.amount
         : 0;
-      const status = await continueRun(pendingApproval.run, pendingApproval.actionIndex + 1, approvedOutflow);
+      const carriedOutflow = Number(pendingApproval.projectedOutflowBefore || 0) + approvedOutflow;
+      const status = await continueRun(pendingApproval.run, pendingApproval.actionIndex + 1, carriedOutflow);
       if (status === "completed") await runMatchingWorkflows(eventFacts, { silent: true });
       announce(status === "pending" ? "تمت الموافقة، والخطوة التالية تنتظر موافقتك" : "تمت الموافقة وتنفيذ الخطوات التالية");
     } catch (error) {
