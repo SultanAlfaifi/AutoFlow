@@ -841,7 +841,7 @@
 [data-theme="dark"] .financial-provider-card strong { color: #eaf3f4; }
 [data-theme="dark"] .create-automation-primary { color: #073b4b; }
 
-@media (max-width: 1024px), (max-height: 600px) and (pointer: coarse) {
+@media (max-width: 600px), (max-height: 600px) and (pointer: coarse) {
   .assistant-launcher { right: 12px; bottom: calc(86px + env(safe-area-inset-bottom)); }
   .automation-assistant--drawer {
     right: 8px;
