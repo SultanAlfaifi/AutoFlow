@@ -748,6 +748,14 @@ test("58. compound AI requests preserve every ordered action and explicit approv
     assert.deepEqual(result.automation.actions.map((action) => action.approval.mode), ["always", "always", "always"]);
     assert.equal(result.automation.actions[1].beneficiaryId, "worker");
     assert.equal(result.automation.actions[2].safety.minBalance, "5000");
+
+    const updateCapture = [];
+    const updated = await generateAssistantResult({
+      ...payload,
+      state: { ...payload.state, draft: incomplete.automation },
+    }, mockOpenAI([incomplete, complete], updateCapture));
+    assert.equal(updateCapture.length, 2);
+    assert.deepEqual(updated.automation.actions.map((action) => action.type), ["pay-bills", "beneficiary-transfer", "save"]);
   } finally {
     if (oldKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = oldKey;
   }

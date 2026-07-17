@@ -292,8 +292,9 @@ export function requestedActionIntents(message) {
 }
 
 function validateRequestCompleteness(envelope, message, currentDraft = null) {
-  if (currentDraft || envelope?.action !== "create_draft" || !envelope.automation) return [];
+  if (envelope?.action !== "create_draft" || !envelope.automation) return [];
   const expected = requestedActionIntents(message);
+  if (currentDraft && expected.length <= 1) return [];
   const actual = envelope.automation.actions || [];
   const issues = [];
   if (expected.length > actual.length) {
