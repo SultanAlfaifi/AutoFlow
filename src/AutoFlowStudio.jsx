@@ -17,6 +17,7 @@ import {
   Landmark,
   ListChecks,
   MessageCircle,
+  Mic,
   Pause,
   PencilLine,
   Plus,
@@ -424,7 +425,7 @@ function newAssistantConversation() {
   };
 }
 
-function AutomationAssistant({ account, financialSnapshot, bills, workflows, workflowMetadata, onDraft, openDraft }) {
+function AutomationAssistant({ account, financialSnapshot, bills, workflows, workflowMetadata, onDraft, openDraft, open, initialMode, onClose }) {
   const [conversation, setConversation] = useState(() => {
     const stored = loadObject(AI_CONVERSATION_KEY, null);
     return stored?.conversation_id && Array.isArray(stored.messages) ? stored : newAssistantConversation();
@@ -436,6 +437,9 @@ function AutomationAssistant({ account, financialSnapshot, bills, workflows, wor
   const [mode, setMode] = useState("text");
 
   useEffect(() => localStorage.setItem(AI_CONVERSATION_KEY, JSON.stringify(conversation)), [conversation]);
+  useEffect(() => {
+    if (open) setMode(initialMode || "text");
+  }, [open, initialMode]);
   useEffect(() => {
     const currentWorkflow = workflows.find((workflow) => workflow.id === `ai-${conversation.conversation_id}`);
     if (!currentWorkflow || currentWorkflow === conversation.state?.draft) return;
@@ -509,11 +513,14 @@ function AutomationAssistant({ account, financialSnapshot, bills, workflows, wor
   };
 
   const draft = conversation.state?.draft;
-  return <section className="automation-assistant" aria-label="مساعد إنشاء الأتمتة">
-    <header><span><MessageCircle /></span><div><small>مساعد AutoFlow الذكي</small><h2>أنشئها بطريقتك</h2></div><button type="button" onClick={resetConversation} title="بدء محادثة جديدة"><RotateCcw /> محادثة جديدة</button></header>
+  if (!open) return null;
+  return <div className="assistant-drawer-layer" role="presentation">
+    <button className="assistant-drawer-backdrop" type="button" onClick={onClose} aria-label="إغلاق مساعد AutoFlow" />
+    <section className="automation-assistant automation-assistant--drawer" role="dialog" aria-modal="true" aria-label="مساعد إنشاء الأتمتة">
+    <header><span><Sparkles /></span><div><small>مساعد AutoFlow</small><h2>وش تبي تسوي؟</h2></div><div className="assistant-header-actions"><button type="button" onClick={resetConversation} title="بدء محادثة جديدة" aria-label="محادثة جديدة"><RotateCcw /></button><button type="button" onClick={onClose} title="إغلاق" aria-label="إغلاق المساعد"><X /></button></div></header>
     <div className="assistant-mode-tabs" role="tablist" aria-label="طريقة إنشاء الأتمتة">
       <button type="button" role="tab" aria-selected={mode === "text"} className={mode === "text" ? "is-active" : ""} onClick={() => setMode("text")}>اكتب ما تريد</button>
-      <button type="button" role="tab" aria-selected={mode === "voice"} className={mode === "voice" ? "is-active" : ""} onClick={() => setMode("voice")}>تحدث مع AutoFlow</button>
+      <button type="button" role="tab" aria-selected={mode === "voice"} className={mode === "voice" ? "is-active" : ""} onClick={() => setMode("voice")}><Mic /> تحدث مع AutoFlow</button>
     </div>
     {mode === "text" ? <>
     <div className="automation-assistant__messages" aria-live="polite" role="log">
@@ -544,7 +551,8 @@ function AutomationAssistant({ account, financialSnapshot, bills, workflows, wor
       onReview={openDraft}
       onReset={resetConversation}
     />}
-  </section>;
+    </section>
+  </div>;
 }
 
 export default function AutoFlowStudio({ announce, plaidSnapshot, refreshPlaid, updatePlaidSnapshot, beneficiaries, transfers, bills, createTransfer, addBill, payBills }) {
@@ -561,6 +569,9 @@ export default function AutoFlowStudio({ announce, plaidSnapshot, refreshPlaid, 
   const [activeTab, setActiveTab] = useState("flows");
   const [busyEvent, setBusyEvent] = useState(null);
   const [showMoreEvents, setShowMoreEvents] = useState(false);
+  const [showTestTools, setShowTestTools] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantMode, setAssistantMode] = useState("text");
   const [lastEvent, setLastEvent] = useState(null);
   const [publishTarget, setPublishTarget] = useState(null);
   const [publishBusy, setPublishBusy] = useState(false);
@@ -784,6 +795,10 @@ export default function AutoFlowStudio({ announce, plaidSnapshot, refreshPlaid, 
   };
 
   const newWorkflow = () => setEditor(makeManualWorkflow());
+  const openAssistant = (mode = "text") => {
+    setAssistantMode(mode);
+    setAssistantOpen(true);
+  };
 
   const eventCount = useMemo(() => Object.keys(eventFacts).length, [eventFacts]);
   const primaryEvents = eventTypes.filter((event) => event.primary);
@@ -804,18 +819,28 @@ export default function AutoFlowStudio({ announce, plaidSnapshot, refreshPlaid, 
   </button>;
 
   return <div className="shortcut-studio">
-    <header className="shortcut-studio__header"><div><span className="shortcut-logo"><Workflow /></span><div><h1>AutoFlow</h1><span><i /> البيانات التجريبية متصلة</span></div></div><button type="button" onClick={newWorkflow}><Plus /> أتمتة جديدة</button></header>
-
-    <AutomationAssistant account={plaidSnapshot?.account} financialSnapshot={plaidSnapshot} bills={bills} workflows={workflows} workflowMetadata={workflowMetadata} onDraft={saveAiDraft} openDraft={openDraftById} />
+    <header className="shortcut-studio__header"><div><span className="shortcut-logo"><Workflow /></span><div><h1>AutoFlow</h1><span><i /> جاهز للعمل</span></div></div><button type="button" onClick={newWorkflow}><Settings2 /> إنشاء يدوي</button></header>
 
     {!workflows.length ? <section className="automation-empty-state">
       <span className="automation-empty-state__icon"><Sparkles /></span>
-      <small>ابدأ بطريقتك</small>
-      <h2>لا توجد أتمتات بعد</h2>
-      <p>أنشئ أول أتمتة وحدد متى تبدأ، ماذا تنفذ، وهل تحتاج موافقتك.</p>
-      <button type="button" onClick={newWorkflow}><Plus /> إنشاء أول أتمتة</button>
-      <div className="automation-empty-state__steps"><span><b>1</b> اختر حدث البدء</span><span><b>2</b> أضف خطوات التنفيذ</span><span><b>3</b> حدد الموافقة</span></div>
+      <small>خلها علينا</small>
+      <h2>وش ودك يصير تلقائيًا؟</h2>
+      <p>قل لـ AutoFlow طلبك بكلماتك، وهو يجهز لك مسودة آمنة تراجعها قبل تشغيلها.</p>
+      <button type="button" onClick={() => openAssistant("text")}><MessageCircle /> تحدث مع المساعد</button>
+      <button className="automation-empty-state__manual" type="button" onClick={newWorkflow}>أو أنشئها يدويًا</button>
     </section> : <>
+    <section className="autoflow-simple-summary" aria-label="ملخص الأتمتات">
+      <div><small>أتمتاتك</small><strong>{workflows.length}</strong></div>
+      <i />
+      <div><small>تعمل الآن</small><strong>{workflows.filter((item) => item.active).length}</strong></div>
+      <i />
+      <div><small>تحتاج مراجعة</small><strong>{workflows.filter((item) => requiresAiReview(workflowMetadata[item.id])).length}</strong></div>
+    </section>
+    <section className="test-tools-disclosure">
+      <button type="button" onClick={() => setShowTestTools((value) => !value)} aria-expanded={showTestTools}>
+        <span><Zap /><span><strong>تجربة الأتمتات</strong><small>شغّل أحداثًا افتراضية للتأكد من عملها</small></span></span><ChevronDown />
+      </button>
+    {showTestTools && <>
     <section className="event-console">
       <div className="event-console__heading">
         <span className="event-console__step">1</span>
@@ -842,6 +867,8 @@ export default function AutoFlowStudio({ announce, plaidSnapshot, refreshPlaid, 
         <span><Zap /><small>أحداث جربتها</small><strong>{eventCount}</strong></span>
         {approvalQueue.length > 0 && <span className="needs-attention"><ShieldCheck /><small>بانتظار موافقتك</small><strong>{approvalQueue.length}</strong></span>}
       </div>
+    </section>
+    </>}
     </section>
 
     <div className="shortcut-tabs" role="tablist"><button role="tab" aria-selected={activeTab === "flows"} className={activeTab === "flows" ? "is-active" : ""} onClick={() => setActiveTab("flows")}>أتمتاتي</button><button role="tab" aria-selected={activeTab === "history"} className={activeTab === "history" ? "is-active" : ""} onClick={() => setActiveTab("history")}>ما الذي تم تنفيذه؟</button></div>
@@ -872,6 +899,11 @@ export default function AutoFlowStudio({ announce, plaidSnapshot, refreshPlaid, 
     </section> : <section className="shortcut-history"><header><div><h2>ما الذي تم تنفيذه؟</h2><span>نتيجة كل حدث وكل خطوة بالترتيب</span></div><button type="button" onClick={() => setHistory([])}><Trash2 /> مسح السجل</button></header>{history.length ? history.map((item) => <div className={`shortcut-log shortcut-log--${item.status}`} key={item.id}><i /><div><strong>{item.title}</strong><span>{item.detail}</span></div><time>{item.time}</time></div>) : <div className="shortcut-empty"><FileText /><strong>لم تُشغّل أي أحداث بعد</strong><span>اختر حدثاً من مربع التجربة في الأعلى.</span></div>}</section>}
     </>}
 
+    <div className="assistant-launcher" aria-label="التواصل مع مساعد AutoFlow">
+      <button className="assistant-launcher__voice" type="button" onClick={() => openAssistant("voice")} aria-label="التحدث صوتيًا مع AutoFlow"><Mic /></button>
+      <button className="assistant-launcher__chat" type="button" onClick={() => openAssistant("text")} aria-label="فتح مساعد AutoFlow"><Sparkles /><span>اسأل AutoFlow</span></button>
+    </div>
+    <AutomationAssistant open={assistantOpen} initialMode={assistantMode} onClose={() => setAssistantOpen(false)} account={plaidSnapshot?.account} financialSnapshot={plaidSnapshot} bills={bills} workflows={workflows} workflowMetadata={workflowMetadata} onDraft={saveAiDraft} openDraft={openDraftById} />
     {editor && <ShortcutEditor workflow={editor} beneficiaries={beneficiaries} account={plaidSnapshot?.account} metadata={workflowMetadata[editor.id]} close={() => setEditor(null)} save={saveWorkflow} requestPublish={requestPublishFromEditor} />}
     {deleteTarget && <div className="shortcut-delete-layer"><section role="dialog" aria-modal="true" aria-labelledby="delete-automation-title"><span className="shortcut-delete-layer__icon"><AlertTriangle /></span><small>حذف نهائي</small><h2 id="delete-automation-title">حذف «{deleteTarget.name}»؟</h2><p>سيتم حذف الأتمتة وكل إعداداتها من هذا الجهاز. لا يمكن التراجع عن هذا الإجراء.</p><div><button type="button" onClick={() => setDeleteTarget(null)}>إلغاء</button><button type="button" onClick={deleteWorkflow}><Trash2 /> حذف الأتمتة نهائيًا</button></div></section></div>}
     {pendingApproval && <div className="shortcut-approval-layer"><section role="dialog" aria-modal="true" aria-label="طلب موافقة على إجراء"><span><ShieldCheck /></span><small>طلب موافقة</small><h2>{pendingApproval.run.workflowTitle}</h2><p>{actionLabel(pendingApproval.action)}{pendingApproval.amount ? ` بقيمة ${formatMoney(pendingApproval.amount, currency)}` : ""}</p><div><button type="button" onClick={reject}>رفض</button><button type="button" onClick={approve}>موافقة ومتابعة</button></div></section></div>}
