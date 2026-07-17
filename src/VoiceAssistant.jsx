@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from "react";
-import { FileText, MessageSquareText, Mic, MicOff, RotateCcw, ShieldCheck, Square } from "lucide-react";
+import React from "react";
+import { FileText, MessageSquareText, Mic, MicOff, ShieldCheck, Square } from "lucide-react";
 import { VOICE_STATUS_LABELS } from "./realtimeVoiceEvents.js";
 import { useRealtimeVoiceAssistant } from "./useRealtimeVoiceAssistant.js";
 
@@ -13,30 +13,13 @@ export default function VoiceAssistant({
   safetyLabels,
   onDraft,
   onReview,
-  onReset,
   onUseText = () => {},
 }) {
   const voice = useRealtimeVoiceAssistant({ conversationId, draft, metadata, account, onDraft });
   const statusLabel = VOICE_STATUS_LABELS[voice.status] || VOICE_STATUS_LABELS.idle;
   const canStart = !voice.active && voice.availability.enabled && !voice.availability.loading;
-  const hasConversation = voice.transcript.length > 0;
   const voiceUnavailable = !voice.availability.loading && !voice.availability.enabled;
   const draftSummary = `${conditionLabels.join("، ") || "حدد وقت البدء"}، وبعدها ${actionLabels.join("، ") || "حدد ما الذي سينفذه AutoFlow"}.`;
-  const transcriptRef = useRef(null);
-
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      const element = transcriptRef.current;
-      if (element) element.scrollTop = element.scrollHeight;
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [voice.transcript, voice.status]);
-
-  const reset = () => {
-    voice.stop();
-    voice.clearTranscript();
-    onReset();
-  };
   const review = () => {
     voice.stop();
     if (draft) onReview(draft.id);
@@ -70,18 +53,6 @@ export default function VoiceAssistant({
       </>}
       {voice.error && <div className="assistant-error voice-error" role="alert">{voice.error}</div>}
       <div className="voice-privacy-note"><ShieldCheck /><span>ينشئ مسودة للمراجعة فقط، ولا ينفذ أي عملية مالية.</span></div>
-    </section>
-
-    <section className="voice-transcript-card" aria-label="سجل المحادثة">
-      <header><span><MessageSquareText /></span><div><strong>المحادثة</strong><small>{voice.transcript.length ? `${voice.transcript.length} رسائل` : "ستظهر هنا تلقائيًا"}</small></div></header>
-      <div className="voice-transcript" role="log" aria-live="polite" aria-label="النص المفرغ للمحادثة" ref={transcriptRef}>
-        {hasConversation
-          ? voice.transcript.map((message) => <div className={`voice-transcript__message voice-transcript__message--${message.role}`} key={message.id}>
-            <small>{message.role === "user" ? "أنت" : "مساعد AutoFlow"}</small><span>{message.text}</span>
-          </div>)
-          : <div className="voice-transcript__empty"><MessageSquareText /><strong>نص المحادثة سيظهر هنا</strong><span>ابدأ المحادثة، وستشاهد كلامك ورد المساعد مكتوبًا مباشرة.</span></div>}
-      </div>
-      {hasConversation && <button className="voice-reset-button" type="button" onClick={reset} aria-label="مسح المحادثة والبدء من جديد"><RotateCcw /> محادثة جديدة</button>}
     </section>
 
     {draft && <aside className="voice-draft-preview voice-draft-preview--simple" aria-label="ملخص مسودة الأتمتة">

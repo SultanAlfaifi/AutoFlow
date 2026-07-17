@@ -689,7 +689,6 @@ function AutomationAssistant({ account, financialSnapshot, bills, workflows, wor
       safetyLabels={draft ? draft.actions.flatMap(actionSafetySummary) : []}
       onDraft={acceptDraft}
       onReview={openDraft}
-      onReset={resetConversation}
       onUseText={() => setMode("text")}
     />}
     </section>
