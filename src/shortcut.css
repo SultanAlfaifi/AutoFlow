@@ -53,6 +53,32 @@
 .create-automation-primary:active { transform: scale(.99); }
 .create-automation-primary:focus-visible { outline: 3px solid rgba(239, 121, 95, .4); outline-offset: 3px; }
 
+.common-automation-templates { margin: 0 0 14px; padding: 12px; border: 1px solid #ddd8d3; border-radius: 14px; background: #fff; box-shadow: 0 6px 18px rgba(7, 52, 65, .04); }
+.common-automation-templates > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.common-automation-templates > header > div { min-width: 0; }
+.common-automation-templates > header small { color: #df6659; font-size: 8px; font-weight: 900; }
+.common-automation-templates > header h2 { margin: 1px 0 2px; color: #073d4d; font-size: 16px; letter-spacing: 0; }
+.common-automation-templates > header p { margin: 0; color: #718287; font-size: 8px; line-height: 1.5; }
+.common-automation-templates > header > button { flex: 0 0 auto; min-height: 30px; padding: 0 9px; border: 1px solid #d9d3ce; border-radius: 8px; color: #00637a; background: #f7f5f3; font-size: 8px; font-weight: 900; }
+.common-template-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.common-template-card { min-width: 0; min-height: 112px; display: grid; grid-template-columns: 32px minmax(0, 1fr); align-content: start; gap: 7px; padding: 9px; border: 1px solid #e3ded9; border-radius: 11px; color: #073d4d; background: #fbfaf9; text-align: right; cursor: pointer; transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease; }
+.common-template-card:hover { transform: translateY(-1px); border-color: #ef9a8f; box-shadow: 0 7px 16px rgba(7, 52, 65, .07); }
+.common-template-card:active { transform: scale(.985); }
+.common-template-card:focus-visible { outline: 3px solid rgba(239, 121, 95, .35); outline-offset: 2px; }
+.common-template-card__icon { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 9px; color: #247052; background: #dff4e9; }
+.common-template-card__icon svg { width: 16px; }
+.common-template-card__copy { min-width: 0; }
+.common-template-card__copy em, .common-template-card__copy strong, .common-template-card__copy small { display: block; font-style: normal; }
+.common-template-card__copy em { margin-bottom: 1px; color: #5d7a82; font-size: 7px; font-weight: 900; }
+.common-template-card__copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+.common-template-card__copy small { margin-top: 2px; color: #718287; font-size: 7px; line-height: 1.45; }
+.common-template-card__action { grid-column: 1 / -1; align-self: end; display: flex; align-items: center; justify-content: flex-end; gap: 3px; margin-top: 2px; color: #007087; font-size: 7px; font-weight: 900; }
+.common-template-card__action svg { width: 10px; }
+.common-template-card--coral .common-template-card__icon { color: #b84a41; background: #ffe5e1; }
+.common-template-card--teal .common-template-card__icon, .common-template-card--blue .common-template-card__icon { color: #17687b; background: #dff2f6; }
+.common-template-card--gold .common-template-card__icon { color: #8a641f; background: #fff0ce; }
+.common-template-card--violet .common-template-card__icon { color: #604eaa; background: #ebe7ff; }
+
 .automation-empty-state { min-height: 430px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 28px 20px; border: 1px solid #ddd6d0; border-radius: 12px; color: #073d4d; text-align: center; background: white; animation: shortcut-fade-up .35s ease both; }
 .automation-empty-state__icon { width: 60px; height: 60px; display: grid; place-items: center; margin-bottom: 13px; border-radius: 16px; color: #b7433b; background: #ffe5e1; }
 .automation-empty-state__icon svg { width: 28px; }
@@ -869,6 +895,11 @@
 [data-theme="dark"] .financial-provider-card { border-color: #31545e; color: #eaf3f4; background: #073543; }
 [data-theme="dark"] .financial-provider-card strong { color: #eaf3f4; }
 [data-theme="dark"] .create-automation-primary { color: #073b4b; }
+[data-theme="dark"] .common-automation-templates { border-color: #31545e; background: #073543; }
+[data-theme="dark"] .common-automation-templates > header h2 { color: #eaf3f4; }
+[data-theme="dark"] .common-automation-templates > header > button { border-color: #3a5c65; color: #bfe5eb; background: #0e4250; }
+[data-theme="dark"] .common-template-card { border-color: #31545e; color: #eaf3f4; background: #0a3b49; }
+[data-theme="dark"] .common-template-card__copy small { color: #abc0c5; }
 
 @media (max-width: 600px), (max-height: 600px) and (pointer: coarse) {
   .assistant-launcher { right: 12px; bottom: calc(104px + env(safe-area-inset-bottom)); }

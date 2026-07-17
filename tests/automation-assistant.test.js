@@ -44,6 +44,7 @@ import {
 } from "../api/automation-assistant.js";
 import { publishAiDraft } from "../api/automation-publish.js";
 import { convertPlaidAmountToSar } from "../api/plaid-snapshot.js";
+import { buildAutomationTemplate, COMMON_AUTOMATION_TEMPLATES } from "../src/automationTemplates.js";
 
 function validDraft(overrides = {}) {
   return {
@@ -779,4 +780,32 @@ test("59. balance-percent uses the projected balance remaining at its ordered st
     ...action,
     safety: { ...action.safety, balanceAboveOn: true, balanceAbove: "5000" },
   }, 510, { balance: 5100, todayTransfers: 0, now: "2026-07-17T09:00:00.000Z" }), []);
+});
+
+test("60. common templates open as complete editable drafts without publishing", async () => {
+  assert.deepEqual(COMMON_AUTOMATION_TEMPLATES.map((template) => template.id), [
+    "salary-savings",
+    "electricity-bill",
+    "monthly-family-transfer",
+    "low-balance-alert",
+    "water-bill",
+    "chatgpt-subscription",
+  ]);
+  COMMON_AUTOMATION_TEMPLATES.forEach((template) => {
+    const draft = buildAutomationTemplate(template.id, `template-test-${template.id}`);
+    assert.ok(draft);
+    assert.equal(draft.active, true);
+    assert.equal(draft.runs, 0);
+    assert.ok(draft.conditions.length > 0);
+    assert.ok(draft.actions.length > 0);
+    assert.deepEqual(validateAutomation(draft, { source: "manual" }), []);
+    draft.actions.forEach((action) => assert.equal(action.approval.mode, "always"));
+  });
+  assert.equal(buildAutomationTemplate("unknown-template"), null);
+
+  const source = await readFile(new URL("../src/AutoFlowStudio.jsx", import.meta.url), "utf8");
+  assert.match(source, /قوالب جاهزة/);
+  assert.match(source, /COMMON_AUTOMATION_TEMPLATES\.slice/);
+  assert.match(source, /setEditor\(draft\)/);
+  assert.match(source, /استخدم القالب/);
 });

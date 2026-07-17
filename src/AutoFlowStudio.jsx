@@ -44,6 +44,7 @@ import {
   resolveExecutionAmount,
 } from "./workflowEngine.js";
 import VoiceAssistant from "./VoiceAssistant.jsx";
+import { buildAutomationTemplate, COMMON_AUTOMATION_TEMPLATES } from "./automationTemplates.js";
 import {
   ACTION_TYPES,
   AUTOMATION_ACTION_EXAMPLES,
@@ -127,6 +128,14 @@ const automationColors = [
   { id: "gold", label: "ذهبي", value: "#c99032" },
   { id: "violet", label: "بنفسجي", value: "#8267c7" },
 ];
+
+const templateIcons = {
+  salary: BanknoteArrowDown,
+  receipt: ReceiptText,
+  calendar: CalendarClock,
+  shield: ShieldCheck,
+  repeat: Repeat2,
+};
 
 const eventHelp = {
   salary: "يبدأ عندما تُسجل دفعة راتب في الحساب.",
@@ -715,6 +724,7 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
   const [busyEvent, setBusyEvent] = useState(null);
   const [showMoreEvents, setShowMoreEvents] = useState(false);
   const [showTestTools, setShowTestTools] = useState(false);
+  const [showAllTemplates, setShowAllTemplates] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantMode, setAssistantMode] = useState("text");
   const [advancedTarget, setAdvancedTarget] = useState(null);
@@ -1005,6 +1015,12 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
   };
 
   const newWorkflow = () => setEditor(makeManualWorkflow());
+  const useAutomationTemplate = (template) => {
+    const draft = buildAutomationTemplate(template.id);
+    if (!draft) return;
+    setEditor(draft);
+    announce(`تم فتح قالب ${template.title} للمراجعة والتعديل`);
+  };
   const saveAdvancedSettings = (workflow) => {
     setWorkflows((items) => upsertWorkflow(items, workflow));
     setAdvancedTarget(null);
@@ -1061,6 +1077,22 @@ export default function AutoFlowStudio({ announce, financialSnapshot, refreshFin
       <span><strong>إنشاء أتمتة جديدة</strong><small>اختر متى تبدأ وماذا تنفّذ</small></span>
       <ChevronLeft />
     </button>
+    <section className="common-automation-templates" aria-labelledby="common-templates-title">
+      <header>
+        <div><small>ابدأ بسرعة</small><h2 id="common-templates-title">قوالب جاهزة</h2><p>اختر الأقرب لك، ثم عدّل المبلغ أو الموعد قبل الحفظ.</p></div>
+        <button type="button" onClick={() => setShowAllTemplates((value) => !value)} aria-expanded={showAllTemplates}>{showAllTemplates ? "عرض أقل" : "عرض الكل"}</button>
+      </header>
+      <div className="common-template-grid">
+        {COMMON_AUTOMATION_TEMPLATES.slice(0, showAllTemplates ? COMMON_AUTOMATION_TEMPLATES.length : 4).map((template) => {
+          const Icon = templateIcons[template.icon] || Sparkles;
+          return <button className={`common-template-card common-template-card--${template.tone}`} type="button" key={template.id} onClick={() => useAutomationTemplate(template)}>
+            <span className="common-template-card__icon"><Icon /></span>
+            <span className="common-template-card__copy"><em>{template.badge}</em><strong>{template.title}</strong><small>{template.description}</small></span>
+            <span className="common-template-card__action">استخدم القالب <ChevronLeft /></span>
+          </button>;
+        })}
+      </div>
+    </section>
 
     {!workflows.length ? <section className="automation-empty-state">
       <span className="automation-empty-state__icon"><Sparkles /></span>
