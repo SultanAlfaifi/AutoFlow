@@ -247,6 +247,9 @@
 .block-icon svg { width: 16px; }
 .block-fields { min-width: 0; display: grid; gap: 7px; }
 .field-help { display: block; color: #667b81; font-size: 9px; line-height: 1.55; }
+.field-example { display: flex; align-items: flex-start; gap: 6px; padding: 7px 8px; border-radius: 7px; color: #536c73; background: #f2f6f6; font-size: 9px; line-height: 1.55; }
+.field-example b { flex: 0 0 auto; padding: 1px 5px; border-radius: 5px; color: #8a4c43; background: #ffe5df; font-size: 8px; }
+.field-example span { min-width: 0; }
 .shortcut-block select, .shortcut-block input, .shortcut-block textarea { width: 100%; min-width: 0; min-height: 40px; box-sizing: border-box; border: 1px solid #cfc7c1; border-radius: 8px; padding: 9px 10px; color: #113f4c; background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.02); transition: border-color .18s, box-shadow .18s, background .18s; }
 .shortcut-block select:hover, .shortcut-block input:hover { border-color: #8aaab1; }
 .shortcut-block select:focus, .shortcut-block input:focus, .shortcut-block textarea:focus { outline: 0; border-color: #007087; box-shadow: 0 0 0 3px rgba(0,112,135,.12); }
@@ -422,6 +425,7 @@
 [data-theme="dark"] .advanced-settings, [data-theme="dark"] .advanced-settings > header, [data-theme="dark"] .advanced-action-settings, [data-theme="dark"] .advanced-settings > footer,
 [data-theme="dark"] .sandbox-beneficiaries button, [data-theme="dark"] .autoflow-transfer-history, [data-theme="dark"] .sandbox-bills { background: #073543; border-color: #31545e; color: #f2f6f7; }
 [data-theme="dark"] .event-grid button, [data-theme="dark"] .shortcut-pipeline, [data-theme="dark"] .safety-setting, [data-theme="dark"] .advanced-action-settings__title, [data-theme="dark"] .shortcut-card__advanced { background: #0c3d4b; border-color: #31545e; color: #f2f6f7; }
+[data-theme="dark"] .field-example { color: #c4d3d6; background: #0c3d4b; }
 [data-theme="dark"] .advanced-settings__section, [data-theme="dark"] .advanced-action-settings__title { border-color: #31545e; }
 [data-theme="dark"] .advanced-settings .safety-setting > input, [data-theme="dark"] .advanced-settings .hour-fields input, [data-theme="dark"] .advanced-threshold input, [data-theme="dark"] .advanced-settings .approval-choice button { border-color: #31545e; color: #f2f6f7; background: #062e3a; }
 [data-theme="dark"] .advanced-settings .approval-choice button.is-selected { border-color: #ff897c; color: #ffd8d3; background: #643b3a; }

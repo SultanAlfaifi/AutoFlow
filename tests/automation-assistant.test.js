@@ -3,13 +3,17 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   AI_SAFE_DEFAULTS,
+  ACTION_TYPES,
   ASSISTANT_RESPONSE_SCHEMA,
+  AUTOMATION_ACTION_EXAMPLES,
   AUTOMATION_JSON_SCHEMA,
+  AUTOMATION_TRIGGER_EXAMPLES,
   BILL_PAYMENT_TARGETS,
   DEFAULT_SCHEDULE,
   DEFAULT_SAFETY,
   SANDBOX_BILL_SERVICES,
   SANDBOX_BENEFICIARIES,
+  TRIGGER_TYPES,
   createAiMetadata,
   getAssistantQuickReplyMode,
   getAssistantQuickReplies,
@@ -500,4 +504,15 @@ test("45. manual subscription triggers use the trusted service dropdown", async 
   assert.match(source, /select aria-label="اختر الاشتراك"/);
   assert.match(source, /subscriptionServices\.map/);
   assert.doesNotMatch(source, /placeholder="اسم الجهة، مثل Netflix/);
+});
+
+test("46. every trigger and execution action has a visible supported example", async () => {
+  assert.deepEqual(Object.keys(AUTOMATION_TRIGGER_EXAMPLES).sort(), [...TRIGGER_TYPES].sort());
+  assert.deepEqual(Object.keys(AUTOMATION_ACTION_EXAMPLES).sort(), [...ACTION_TYPES].sort());
+  Object.values(AUTOMATION_TRIGGER_EXAMPLES).forEach((example) => assert.ok(example.length > 12));
+  Object.values(AUTOMATION_ACTION_EXAMPLES).forEach((example) => assert.ok(example.length > 12));
+
+  const source = await readFile(new URL("../src/AutoFlowStudio.jsx", import.meta.url), "utf8");
+  assert.match(source, /AUTOMATION_TRIGGER_EXAMPLES\[condition\.type\]/);
+  assert.match(source, /AUTOMATION_ACTION_EXAMPLES\[action\.type\]/);
 });

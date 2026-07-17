@@ -22,6 +22,28 @@ export const ACTION_TYPES = [
   "pause",
 ];
 
+export const AUTOMATION_TRIGGER_EXAMPLES = Object.freeze({
+  salary: "إذا نزل راتبي وكان 5,000 ر.س أو أكثر.",
+  incoming: "عند وصول أي حوالة إلى الحساب.",
+  "bill-due": "عند استحقاق فاتورة الكهرباء.",
+  "large-expense": "إذا تم شراء بقيمة 300 ر.س أو أكثر.",
+  subscription: "عند استحقاق اشتراك ChatGPT Plus.",
+  "balance-below": "إذا انخفض الرصيد عن 1,000 ر.س.",
+  "month-end": "في آخر يوم من كل شهر.",
+  scheduled: "يوم 1 من كل شهر الساعة 9 صباحًا.",
+});
+
+export const AUTOMATION_ACTION_EXAMPLES = Object.freeze({
+  save: "حوّل 10% من مبلغ الحدث إلى الادخار.",
+  "internal-transfer": "حوّل 500 ر.س بين حساباتي.",
+  "beneficiary-transfer": "حوّل 200 ر.س إلى سارة أحمد.",
+  split: "وجّه 20% من مبلغ الحدث إلى حساب العائلة.",
+  "pay-bills": "سدّد ChatGPT Plus عند استحقاقه.",
+  notify: "أرسل إشعارًا: تم تنفيذ الأتمتة.",
+  categorize: "صنّف العملية باسم «اشتراكات».",
+  pause: "أوقف الأتمتات الأخرى عند انخفاض الرصيد.",
+});
+
 export const OPERATOR_TYPES = ["any", "gte", "lte"];
 export const JOIN_TYPES = ["and", "or"];
 export const AMOUNT_MODES = ["percent", "fixed"];
