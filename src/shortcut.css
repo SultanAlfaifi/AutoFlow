@@ -669,10 +669,12 @@
   z-index: 45;
   right: 14px;
   bottom: 88px;
+  max-width: calc(100% - 28px);
   display: flex;
   align-items: center;
 }
 .assistant-launcher button {
+  max-width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -713,7 +715,7 @@
   position: absolute;
   right: 12px;
   bottom: 80px;
-  width: calc(100% - 24px);
+  width: min(520px, calc(100% - 24px));
   max-height: calc(100% - 96px);
   display: flex;
   flex-direction: column;
@@ -823,12 +825,12 @@
 [data-theme="dark"] .financial-provider-card strong { color: #eaf3f4; }
 [data-theme="dark"] .create-automation-primary { color: #073b4b; }
 
-@media (max-width: 600px), (max-height: 600px) and (pointer: coarse) {
+@media (max-width: 1024px), (max-height: 600px) and (pointer: coarse) {
   .assistant-launcher { right: 12px; bottom: calc(86px + env(safe-area-inset-bottom)); }
   .automation-assistant--drawer {
     right: 8px;
     bottom: calc(80px + env(safe-area-inset-bottom));
-    width: calc(100% - 16px);
+    width: min(520px, calc(100% - 16px));
     max-height: calc(100% - 92px - env(safe-area-inset-bottom));
   }
 }
