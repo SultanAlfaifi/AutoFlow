@@ -211,7 +211,7 @@ export function makeAction(type = "", id = `action-${Date.now()}-${Math.random()
     beneficiaryId: "",
     message: "",
     safety: { ...DEFAULT_SAFETY },
-    approval: { mode: "", threshold: "" },
+    approval: { mode: "always", threshold: "" },
   };
 }
 

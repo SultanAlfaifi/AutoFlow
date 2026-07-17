@@ -11,6 +11,7 @@ import {
   createAiMetadata,
   getAssistantQuickReplyMode,
   getAssistantQuickReplies,
+  makeAction,
   makeManualWorkflow,
   normalizeAssistantAutomation,
   normalizeWorkflowShape,
@@ -220,9 +221,10 @@ test("18. repeated creation upserts the same draft instead of duplicating it", (
   assert.equal(workflows[0].name, "اسم معدل");
 });
 
-test("19. manual builder keeps its original active=true default and remains valid", () => {
+test("19. manual builder stays active and new actions always request approval by default", () => {
   const manual = makeManualWorkflow("manual-1");
   assert.equal(manual.active, true);
+  assert.equal(makeAction("save", "manual-action-1").approval.mode, "always");
   const complete = validDraft({ id: "manual-1", active: true });
   assert.deepEqual(validateAutomation(complete, { source: "manual" }), []);
 });
@@ -247,6 +249,8 @@ test("21. required review badge and exact manual warning are present in the UI",
   assert.match(source, /تم إنشاء هذه المسودة باستخدام الذكاء الاصطناعي، ولم يتم تفعيلها/);
   assert.match(source, /نعم، راجعت الأتمتة وأرغب في نشرها/);
   assert.match(source, /العودة للمراجعة/);
+  assert.match(source, /الخيارات المتقدمة لـ/);
+  assert.match(source, /فعّل فقط الحدود التي تحتاجها/);
 });
 
 test("22. create_draft is rejected when essential fields remain missing", () => {

@@ -263,7 +263,7 @@ function ShortcutEditor({ workflow, beneficiaries, account, metadata, close, sav
           </div>
         </header>
 
-        <div className="shortcut-editor__progress"><span className={draft.conditions.length ? "is-done" : ""}>1 حدث البدء</span><i /><span className={draft.actions.length ? "is-done" : ""}>2 خطوات التنفيذ</span><i /><span className={draft.actions.length && draft.actions.every((action) => action.approval.mode) ? "is-done" : ""}>3 الموافقة</span></div>
+        <div className="shortcut-editor__progress shortcut-editor__progress--simple"><span className={draft.conditions.length ? "is-done" : ""}>1 حدث البدء</span><i /><span className={draft.actions.length ? "is-done" : ""}>2 خطوات التنفيذ</span></div>
         {isAiDraft && <div className="ai-review-banner" role="status"><Sparkles /><div><strong>تحتاج إلى مراجعة</strong><span>تم إنشاء هذه المسودة باستخدام الذكاء الاصطناعي، ولم يتم تفعيلها. راجع جميع الخطوات قبل النشر.</span><small>المصدر: {account?.name || "الحساب الجاري المتصل"} · وجهة الادخار الثابتة: {beneficiaries.find((item) => item.kind === "internal")?.name || "حساب الادخار"}</small></div></div>}
         {showValidation && !isComplete && <div className="shortcut-validation" role="alert"><strong>باقي خطوة بسيطة قبل الحفظ</strong><span>{issues[0]}</span></div>}
 
@@ -322,7 +322,7 @@ function ShortcutEditor({ workflow, beneficiaries, account, metadata, close, sav
           <div className="shortcut-connector"><i /><span>ثم نفّذ بالترتيب</span><i /></div>
 
           <section className="shortcut-block-section shortcut-block-section--actions">
-            <div className="shortcut-section-heading"><div><small>ماذا تفعل الأتمتة؟</small><h2>خطوات التنفيذ بالترتيب</h2><p>تُنفذ الخطوة رقم 1 أولاً، ثم التي تحتها.</p></div><span>{draft.actions.length} خطوات</span></div>
+            <div className="shortcut-section-heading"><div><small>ماذا تفعل الأتمتة؟</small><h2>خطوات التنفيذ بالترتيب</h2><p>تُنفذ الخطوة رقم 1 أولاً، ثم التي تحتها. سنطلب موافقتك دائمًا بشكل افتراضي.</p></div><span>{draft.actions.length} خطوات</span></div>
             <div className="shortcut-stack">
               {draft.actions.map((action, index) => {
                 const meta = actionTypes.find((item) => item.id === action.type);
@@ -346,18 +346,6 @@ function ShortcutEditor({ workflow, beneficiaries, account, metadata, close, sav
                     {["internal-transfer", "beneficiary-transfer", "split"].includes(action.type) && <label><span>إلى أين يذهب المبلغ؟</span><select className={!action.beneficiaryId ? "is-placeholder" : ""} value={action.beneficiaryId} onChange={(event) => updateAction(action.id, { beneficiaryId: event.target.value })}><option value="">اختر الحساب أو المستفيد</option>{beneficiaries.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
                     {["notify", "categorize"].includes(action.type) && <label><span>{action.type === "notify" ? "نص الإشعار" : "التصنيف"}</span><input value={action.message} onChange={(event) => updateAction(action.id, { message: event.target.value })} placeholder={action.type === "notify" ? "اكتب الرسالة التي ستظهر" : "اكتب اسم التصنيف"} /></label>}
 
-                    {action.type && <><div className="block-settings-title"><ShieldCheck /><div><strong>حدود الأمان لهذه الخطوة <em>اختياري</em></strong><small>لا يوجد حد مفعّل تلقائياً. فعّل فقط ما تحتاجه.</small></div></div>
-                    <div className="safety-grid">
-                      <SafetySetting label="اترك في الحساب رصيداً لا يقل عن" help="تُمنع الخطوة إذا كان الرصيد بعدها أقل من هذا المبلغ." checked={action.safety.minBalanceOn} value={action.safety.minBalance} onToggle={(checked) => updateAction(action.id, { safety: { ...action.safety, minBalanceOn: checked } })} onValue={(value) => updateAction(action.id, { safety: { ...action.safety, minBalance: value } })} />
-                      <SafetySetting label="لا تنفذ مبلغاً أكبر من" help="يضع سقفاً أعلى لمبلغ هذه الخطوة الواحدة." checked={action.safety.maxAmountOn} value={action.safety.maxAmount} onToggle={(checked) => updateAction(action.id, { safety: { ...action.safety, maxAmountOn: checked } })} onValue={(value) => updateAction(action.id, { safety: { ...action.safety, maxAmount: value } })} />
-                      <SafetySetting label="لا أتجاوز هذا الإجمالي في اليوم" help="يجمع تحويلات اليوم ويمنع ما يتجاوز هذا الحد." checked={action.safety.dailyLimitOn} value={action.safety.dailyLimit} onToggle={(checked) => updateAction(action.id, { safety: { ...action.safety, dailyLimitOn: checked } })} onValue={(value) => updateAction(action.id, { safety: { ...action.safety, dailyLimit: value } })} />
-                      <SafetySetting label="نفذ فقط خلال هذه الساعات" help="تُمنع الخطوة خارج وقت البداية والنهاية المحدد." checked={action.safety.hoursOn} value={`${action.safety.startHour}-${action.safety.endHour}`} isHours onToggle={(checked) => updateAction(action.id, { safety: { ...action.safety, hoursOn: checked } })} onHours={(startHour, endHour) => updateAction(action.id, { safety: { ...action.safety, startHour, endHour } })} />
-                    </div>
-
-                    <div className="block-settings-title"><ShieldCheck /><div><strong>هل تحتاج هذه الخطوة موافقتي؟</strong><small>يمكن أن تختلف الموافقة من خطوة إلى أخرى.</small></div></div>
-                    <div className="approval-choice">{[["auto", "لا، نفّذها تلقائياً"], ["always", "نعم، اطلبها دائماً"], ["above", "اطلبها فوق مبلغ"]].map(([value, label]) => <button type="button" key={value} className={action.approval.mode === value ? "is-selected" : ""} onClick={() => updateAction(action.id, { approval: { ...action.approval, mode: value } })}>{label}</button>)}</div>
-                    {action.approval.mode === "above" && <label><span>المبلغ الذي تبدأ بعده الموافقة</span><input type="number" min="0" value={action.approval.threshold} onChange={(event) => updateAction(action.id, { approval: { ...action.approval, threshold: event.target.value } })} /></label>}
-                    </>}
                     <div className="action-block__tools"><button type="button" onClick={() => update({ actions: draft.actions.filter((item) => item.id !== action.id) })}><Trash2 /> حذف خطوة التنفيذ</button></div>
                   </div>}
                 </article>;
@@ -372,11 +360,11 @@ function ShortcutEditor({ workflow, beneficiaries, account, metadata, close, sav
           <section className="shortcut-guide" role="dialog" aria-modal="true" aria-label="دليل بناء الأتمتة">
             <header><div><CircleHelp /><span><small>دليل سريع</small><h2>كيف أبني أتمتة مالية؟</h2></span></div><button type="button" onClick={() => setGuideOpen(false)} aria-label="إغلاق الدليل"><X /></button></header>
             <div className="shortcut-guide__content">
-              <p className="shortcut-guide__intro">الأتمتة عبارة عن أحداث تبدأها، ثم خطوات ينفذها AutoFlow بالترتيب مع حدود الأمان التي تختارها.</p>
+              <p className="shortcut-guide__intro">الأتمتة عبارة عن أحداث تبدأها، ثم خطوات ينفذها AutoFlow بالترتيب.</p>
               <article><b>1</b><div><strong>اختر متى تبدأ</strong><p>مثلاً: عند نزول الراتب، أو عند استحقاق فاتورة. يمكنك إضافة أكثر من شرط.</p></div></article>
               <article><b>2</b><div><strong>اربط الشروط بـ «و» أو «أو»</strong><p><b>و</b> تعني أن الشرطين مطلوبان معاً. <b>أو</b> تعني أن تحقق أحدهما يكفي. تُقرأ العلاقات من الأعلى إلى الأسفل.</p></div></article>
               <article><b>3</b><div><strong>أضف خطوات التنفيذ</strong><p>اختر التحويل أو السداد أو الإشعار، ثم استخدم زري «أعلى» و«أسفل» لتحديد ترتيب التنفيذ.</p></div></article>
-              <article><b>4</b><div><strong>ضع حدود الأمان والموافقة</strong><p>حدد أقل رصيد مسموح، وسقف العملية واليوم ووقت التنفيذ، ثم قرر هل تحتاج كل خطوة موافقتك.</p></div></article>
+              <article><b>4</b><div><strong>راجعها بعد الإنشاء</strong><p>سنطلب موافقتك دائمًا بشكل افتراضي. ويمكنك تعديل حدود الأمان لاحقًا من «الخيارات المتقدمة» في بطاقة الأتمتة.</p></div></article>
               <div className="shortcut-guide__example"><strong>مثال واضح</strong><span>نزل الراتب <b>و</b> الرصيد أعلى من الحد</span><i>ثم</i><span>حوّل 20% للادخار ← سدّد الفواتير ← أرسل إشعاراً</span></div>
             </div>
             <button className="shortcut-guide__done" type="button" onClick={() => setGuideOpen(false)}>فهمت، ابدأ البناء</button>
@@ -399,6 +387,63 @@ function SafetySetting({
 }) {
   const [start = "6", end = "23"] = String(value).split("-");
   return <div className={`safety-setting ${checked ? "is-on" : ""}`}><label><input type="checkbox" checked={checked} onChange={(event) => onToggle(event.target.checked)} /><span><strong>{label}</strong><small>{help}</small></span></label>{checked && (isHours ? <div className="hour-fields"><input aria-label="ساعة البداية" type="number" min="0" max="23" value={start} onChange={(event) => onHours(event.target.value, end)} /><b>إلى</b><input aria-label="ساعة النهاية" type="number" min="1" max="24" value={end} onChange={(event) => onHours(start, event.target.value)} /></div> : <input aria-label={label} type="number" min="0" value={value} onChange={(event) => onValue(event.target.value)} />)}</div>;
+}
+
+function AdvancedWorkflowSettings({ workflow, close, save }) {
+  const [draft, setDraft] = useState(() => ({
+    ...structuredClone(normalizeWorkflowShape(workflow)),
+    actions: normalizeWorkflowShape(workflow).actions.map((action) => ({
+      ...action,
+      approval: { ...action.approval, mode: action.approval?.mode || "always" },
+    })),
+  }));
+  const updateAction = (id, patch) => setDraft((current) => ({
+    ...current,
+    actions: current.actions.map((action) => action.id === id ? { ...action, ...patch } : action),
+  }));
+  const invalidAction = draft.actions.find((action) => {
+    const positive = (value) => Number.isFinite(Number(value)) && Number(value) > 0;
+    if (action.safety.minBalanceOn && !positive(action.safety.minBalance)) return true;
+    if (action.safety.maxAmountOn && !positive(action.safety.maxAmount)) return true;
+    if (action.safety.dailyLimitOn && !positive(action.safety.dailyLimit)) return true;
+    if (action.safety.hoursOn) {
+      const start = Number(action.safety.startHour);
+      const end = Number(action.safety.endHour);
+      if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end > 24 || start >= end) return true;
+    }
+    return action.approval.mode === "above" && !positive(action.approval.threshold);
+  });
+
+  return <div className="advanced-settings-layer">
+    <section className="advanced-settings" role="dialog" aria-modal="true" aria-labelledby="advanced-settings-title">
+      <header>
+        <button type="button" onClick={close} aria-label="إغلاق الخيارات المتقدمة"><X /></button>
+        <div><small>خيارات متقدمة</small><h2 id="advanced-settings-title">{draft.name}</h2><p>هذه الإعدادات اختيارية، والموافقة مطلوبة دائمًا بشكل افتراضي.</p></div>
+        <span><Settings2 /></span>
+      </header>
+      <div className="advanced-settings__scroll">
+        {draft.actions.map((action, index) => <article className="advanced-action-settings" key={action.id}>
+          <div className="advanced-action-settings__title"><span>{index + 1}</span><div><small>خطوة التنفيذ</small><strong>{actionSummary(action)}</strong></div></div>
+          <div className="advanced-settings__section">
+            <div className="block-settings-title"><ShieldCheck /><div><strong>حدود الأمان</strong><small>فعّل فقط الحدود التي تحتاجها.</small></div></div>
+            <div className="safety-grid">
+              <SafetySetting label="اترك رصيدًا لا يقل عن" help="تُمنع الخطوة إذا أصبح الرصيد أقل من هذا المبلغ." checked={action.safety.minBalanceOn} value={action.safety.minBalance} onToggle={(checked) => updateAction(action.id, { safety: { ...action.safety, minBalanceOn: checked } })} onValue={(value) => updateAction(action.id, { safety: { ...action.safety, minBalance: value } })} />
+              <SafetySetting label="ضع حدًا أعلى للعملية" help="لا تنفذ هذه الخطوة إذا تجاوزت المبلغ المحدد." checked={action.safety.maxAmountOn} value={action.safety.maxAmount} onToggle={(checked) => updateAction(action.id, { safety: { ...action.safety, maxAmountOn: checked } })} onValue={(value) => updateAction(action.id, { safety: { ...action.safety, maxAmount: value } })} />
+              <SafetySetting label="ضع حدًا يوميًا" help="يمنع تجاوز إجمالي التحويلات لهذا الحد في اليوم." checked={action.safety.dailyLimitOn} value={action.safety.dailyLimit} onToggle={(checked) => updateAction(action.id, { safety: { ...action.safety, dailyLimitOn: checked } })} onValue={(value) => updateAction(action.id, { safety: { ...action.safety, dailyLimit: value } })} />
+              <SafetySetting label="حدد ساعات التنفيذ" help="لا تعمل الخطوة خارج الوقت المحدد." checked={action.safety.hoursOn} value={`${action.safety.startHour}-${action.safety.endHour}`} isHours onToggle={(checked) => updateAction(action.id, { safety: { ...action.safety, hoursOn: checked } })} onHours={(startHour, endHour) => updateAction(action.id, { safety: { ...action.safety, startHour, endHour } })} />
+            </div>
+          </div>
+          <div className="advanced-settings__section">
+            <div className="block-settings-title"><ShieldCheck /><div><strong>متى نطلب موافقتك؟</strong><small>الخيار الافتراضي والأكثر أمانًا: دائمًا.</small></div></div>
+            <div className="approval-choice">{[["always", "اطلب موافقتي دائمًا"], ["above", "اطلبها فوق مبلغ"], ["auto", "نفّذ تلقائيًا"]].map(([value, label]) => <button type="button" key={value} className={action.approval.mode === value ? "is-selected" : ""} onClick={() => updateAction(action.id, { approval: { ...action.approval, mode: value } })}>{label}</button>)}</div>
+            {action.approval.mode === "above" && <label className="advanced-threshold"><span>اطلب الموافقة عندما يتجاوز المبلغ</span><input type="number" min="0" value={action.approval.threshold} onChange={(event) => updateAction(action.id, { approval: { ...action.approval, threshold: event.target.value } })} /></label>}
+          </div>
+        </article>)}
+      </div>
+      {invalidAction && <div className="advanced-settings__error" role="alert">أكمل قيمة الحد الذي فعّلته قبل الحفظ.</div>}
+      <footer><button type="button" onClick={close}>إلغاء</button><button type="button" disabled={Boolean(invalidAction)} onClick={() => save(draft)}><CheckCircle2 /> حفظ الخيارات</button></footer>
+    </section>
+  </div>;
 }
 
 function makeConversationId() {
@@ -572,6 +617,7 @@ export default function AutoFlowStudio({ announce, plaidSnapshot, refreshPlaid, 
   const [showTestTools, setShowTestTools] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantMode, setAssistantMode] = useState("text");
+  const [advancedTarget, setAdvancedTarget] = useState(null);
   const [lastEvent, setLastEvent] = useState(null);
   const [publishTarget, setPublishTarget] = useState(null);
   const [publishBusy, setPublishBusy] = useState(false);
@@ -795,6 +841,11 @@ export default function AutoFlowStudio({ announce, plaidSnapshot, refreshPlaid, 
   };
 
   const newWorkflow = () => setEditor(makeManualWorkflow());
+  const saveAdvancedSettings = (workflow) => {
+    setWorkflows((items) => upsertWorkflow(items, workflow));
+    setAdvancedTarget(null);
+    announce("تم حفظ الخيارات المتقدمة");
+  };
   const openAssistant = (mode = "text") => {
     setAssistantMode(mode);
     setAssistantOpen(true);
@@ -888,9 +939,12 @@ export default function AutoFlowStudio({ announce, plaidSnapshot, refreshPlaid, 
           <div className="shortcut-card__top">
             <span className="shortcut-card__icon"><AutomationIcon iconId={workflow.icon} /></span>
             <div><strong>{workflow.name}</strong><small>{workflow.category || "شخصية"} · {workflow.conditions.length} من أحداث وشروط البدء · {workflow.actions.length} من خطوات التنفيذ</small></div>
-            {needsReview
-              ? <button className="review-ai-button" type="button" onClick={() => setEditor(workflow)}>مراجعة ونشر</button>
-              : <button className={`shortcut-toggle ${workflow.active ? "is-on" : ""}`} type="button" onClick={() => setWorkflows((items) => items.map((item) => item.id === workflow.id ? { ...item, active: !item.active } : item))} aria-label={`${workflow.active ? "إيقاف" : "تشغيل"} ${workflow.name}`}><i /></button>}
+            <div className="shortcut-card__controls">
+              <button className="shortcut-card__advanced" type="button" onClick={() => setAdvancedTarget(workflow)} aria-label={`الخيارات المتقدمة لـ ${workflow.name}`} title="خيارات متقدمة"><Settings2 /></button>
+              {needsReview
+                ? <button className="review-ai-button" type="button" onClick={() => setEditor(workflow)}>مراجعة ونشر</button>
+                : <button className={`shortcut-toggle ${workflow.active ? "is-on" : ""}`} type="button" onClick={() => setWorkflows((items) => items.map((item) => item.id === workflow.id ? { ...item, active: !item.active } : item))} aria-label={`${workflow.active ? "إيقاف" : "تشغيل"} ${workflow.name}`}><i /></button>}
+            </div>
           </div>
           <div className="shortcut-pipeline"><div><small>تبدأ عندما</small>{workflow.conditions.map((condition) => <span key={condition.id}>{conditionLabel(condition)}</span>)}</div><ChevronLeft /><div><small>ثم تنفذ</small>{workflow.actions.map((action) => <span key={action.id}>{actionSummary(action)}</span>)}</div></div>
           <footer><span>{needsReview ? "غير مفعلة · راجعها قبل النشر" : workflow.runs ? `نُفذت ${workflow.runs} مرة` : "لم يصل حدث مطابق بعد"}</span><div><button type="button" onClick={() => setEditor(workflow)}><PencilLine /> تعديل</button><button className="shortcut-card__delete" type="button" onClick={() => setDeleteTarget(workflow)} aria-label={`حذف ${workflow.name}`} title="حذف الأتمتة"><Trash2 /></button></div></footer>
@@ -904,6 +958,7 @@ export default function AutoFlowStudio({ announce, plaidSnapshot, refreshPlaid, 
       <button className="assistant-launcher__chat" type="button" onClick={() => openAssistant("text")} aria-label="فتح مساعد AutoFlow"><Sparkles /><span>اسأل AutoFlow</span></button>
     </div>
     <AutomationAssistant open={assistantOpen} initialMode={assistantMode} onClose={() => setAssistantOpen(false)} account={plaidSnapshot?.account} financialSnapshot={plaidSnapshot} bills={bills} workflows={workflows} workflowMetadata={workflowMetadata} onDraft={saveAiDraft} openDraft={openDraftById} />
+    {advancedTarget && <AdvancedWorkflowSettings workflow={advancedTarget} close={() => setAdvancedTarget(null)} save={saveAdvancedSettings} />}
     {editor && <ShortcutEditor workflow={editor} beneficiaries={beneficiaries} account={plaidSnapshot?.account} metadata={workflowMetadata[editor.id]} close={() => setEditor(null)} save={saveWorkflow} requestPublish={requestPublishFromEditor} />}
     {deleteTarget && <div className="shortcut-delete-layer"><section role="dialog" aria-modal="true" aria-labelledby="delete-automation-title"><span className="shortcut-delete-layer__icon"><AlertTriangle /></span><small>حذف نهائي</small><h2 id="delete-automation-title">حذف «{deleteTarget.name}»؟</h2><p>سيتم حذف الأتمتة وكل إعداداتها من هذا الجهاز. لا يمكن التراجع عن هذا الإجراء.</p><div><button type="button" onClick={() => setDeleteTarget(null)}>إلغاء</button><button type="button" onClick={deleteWorkflow}><Trash2 /> حذف الأتمتة نهائيًا</button></div></section></div>}
     {pendingApproval && <div className="shortcut-approval-layer"><section role="dialog" aria-modal="true" aria-label="طلب موافقة على إجراء"><span><ShieldCheck /></span><small>طلب موافقة</small><h2>{pendingApproval.run.workflowTitle}</h2><p>{actionLabel(pendingApproval.action)}{pendingApproval.amount ? ` بقيمة ${formatMoney(pendingApproval.amount, currency)}` : ""}</p><div><button type="button" onClick={reject}>رفض</button><button type="button" onClick={approve}>موافقة ومتابعة</button></div></section></div>}
