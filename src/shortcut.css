@@ -919,6 +919,41 @@
 [data-theme="dark"] .common-template-card__copy small { color: #abc0c5; }
 [data-theme="dark"] .common-template-card__action, [data-theme="dark"] .common-template-toggle { color: #bfe5eb; background: #0e4654; }
 
+/* Align AutoFlow with the app-wide visual system */
+.shortcut-studio { padding-right: 14px; padding-left: 14px; }
+.shortcut-studio__header { min-height: 54px; margin-bottom: 10px; }
+.shortcut-logo { border-radius: 13px; box-shadow: 0 5px 14px rgba(223, 94, 80, .16); }
+.financial-provider-card {
+  border-color: color-mix(in srgb, var(--line) 82%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--card) 74%, var(--brand-soft));
+  box-shadow: 0 4px 14px rgba(20, 48, 60, .035);
+}
+.create-automation-primary { border-radius: 16px; box-shadow: 0 8px 20px rgba(223, 94, 80, .18); }
+.automation-empty-state {
+  border-color: color-mix(in srgb, var(--line) 82%, transparent);
+  border-radius: 18px;
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+}
+.shortcut-tabs {
+  padding: 4px;
+  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  border-radius: 13px;
+  background: var(--surface-soft);
+}
+.shortcut-tabs button { border-radius: 10px; }
+.shortcut-tabs button.is-active { box-shadow: 0 3px 10px rgba(20, 48, 60, .07); }
+.shortcut-card, .shortcut-history, .test-tools-disclosure, .common-automation-templates {
+  border-color: color-mix(in srgb, var(--line) 84%, transparent);
+  box-shadow: var(--card-shadow);
+}
+.shortcut-card { border-radius: 16px; overflow: hidden; }
+.shortcut-card:hover { box-shadow: var(--card-shadow-hover); }
+.common-automation-templates { border-radius: 18px; }
+.common-template-card { border-radius: 14px; }
+.assistant-launcher__chat { box-shadow: 0 10px 25px rgba(0, 91, 110, .2); }
+
 @media (max-width: 600px), (max-height: 600px) and (pointer: coarse) {
   .assistant-launcher { right: 12px; bottom: calc(104px + env(safe-area-inset-bottom)); }
   .automation-assistant--drawer {
